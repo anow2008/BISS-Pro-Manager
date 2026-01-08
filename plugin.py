@@ -8,7 +8,8 @@ from Components.Label import Label
 from enigma import eServiceCenter
 import os
 import time
-
+GITHUB_PLUGIN_URL = "https://raw.githubusercontent.com/USERNAME/BissPro/main/plugin.py"
+PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro/plugin.py"
 BISS_FILE = "/etc/tuxbox/config/SoftCam.Key"
 BACKUP_DIR = "/etc/tuxbox/config/biss_backup"
 
@@ -127,4 +128,5 @@ def Plugins(**kwargs):
         description="Full BISS Keys Manager",
         where=PluginDescriptor.WHERE_EXTENSIONSMENU,
         fnc=main
+
     )
