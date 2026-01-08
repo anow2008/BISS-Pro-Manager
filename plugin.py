@@ -32,6 +32,7 @@ class BissPro(Screen):
         self["info"] = Label(
             "أحمر: إضافة | أخضر: حذف | أصفر: Restart Cam | أزرق: Backup"
         )
+        self["list"] = MenuList([]) # قائمة فاضية في البداية
 
         self["actions"] = ActionMap(
             ["ColorActions", "OkCancelActions"],
@@ -47,20 +48,21 @@ class BissPro(Screen):
         self.loadKeys()
 
     def loadKeys(self):
-        keys = []
-        if os.path.exists(BISS_FILE):
-            with open(BISS_FILE, "r") as f:
-                for line in f:
-                    if line.strip().startswith("F"):
-                        keys.append(line.strip())
-        self["list"] = MenuList(keys)
+    keys = []
+    if os.path.exists(BISS_FILE):
+        with open(BISS_FILE, "r") as f:
+            for line in f:
+                if line.strip().startswith("F"):
+                    keys.append(line.strip())
+    self["list"].setList(keys) # تحديث القائمة الموجودة فعلياً
 
     def getCurrentSID(self):
-        service = self.session.nav.getCurrentService()
-        info = service and service.info()
-        if info:
-            return hex(info.getInfo(info.sSID))
-        return "1FFF"
+    service = self.session.nav.getCurrentService()
+    info = service and service.info()
+    if info:
+        sid = info.getInfo(info.sSID)
+        return "%04X" % sid # هيحولها لـ Hex من 4 خانات كبيرة (مثلاً 0001)
+    return "0000"
 
     def addKey(self):
         sid = self.getCurrentSID()
@@ -72,6 +74,13 @@ class BissPro(Screen):
             text=example
         )
 
+    def getChannelName(self):
+    service = self.session.nav.getCurrentService()
+    info = service and service.info()
+    if info:
+        return info.getName()
+    return "Unknown"
+    
     def saveKey(self, key):
         if key:
             backupKeys()
@@ -104,9 +113,11 @@ class BissPro(Screen):
             self.message("تم حذف الشفرة 🗑️")
 
     def restartCam(self):
-        os.system("/etc/init.d/softcam restart")
-        self.message("تم Restart SoftCam 🔄")
-
+    os.system("killall -9 oscam && sleep 2 && /usr/bin/oscam &") # مثال لـ Oscam
+    # أو الطريقة العامة لبعض الصور
+    os.system("/etc/init.d/softcam.oscam restart") 
+    self.message("تم Restart SoftCam 🔄")
+    
     def makeBackup(self):
         backupKeys()
         self.message("تم عمل Backup 💾")
@@ -124,10 +135,11 @@ def main(session, **kwargs):
 
 def Plugins(**kwargs):
     return PluginDescriptor(
-        name="BISS Pro Manager",
+        name="BissPro",
         description="Full BISS Keys Manager",
         where=PluginDescriptor.WHERE_EXTENSIONSMENU,
         fnc=main
 
     )
+
 
