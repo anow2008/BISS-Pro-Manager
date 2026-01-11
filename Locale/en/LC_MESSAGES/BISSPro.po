@@ -1,0 +1,23 @@
+msgid "Add BISS Key"
+msgstr "Add BISS Key"
+
+msgid "View Keys"
+msgstr "View Keys"
+
+msgid "Delete Key"
+msgstr "Delete Key"
+
+msgid "Import from USB"
+msgstr "Import from USB"
+
+msgid "Restore Backup"
+msgstr "Restore Backup"
+
+msgid "Restart Oscam"
+msgstr "Restart Oscam"
+
+msgid "About"
+msgstr "About"
+
+msgid "Exit"
+msgstr "Exit"
