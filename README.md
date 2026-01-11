@@ -25,6 +25,6 @@ BISS Pro Manager هو بلجن احترافي لإدارة شفرات BISS / BIS
 
 ```bash
 cd /usr/lib/enigma2/python/Plugins/Extensions/ && \
-git clone [https://github.com/anow2008/enigma2-plugin-extensions-bisspro.git](https://github.com/anow2008/BissPor.git) && \
+git clone https://github.com/anow2008/BissPor.git && \
 chmod -R 755 enigma2-plugin-extensions-bisspro && \
 killall -9 enigma2 && enigma2 &
