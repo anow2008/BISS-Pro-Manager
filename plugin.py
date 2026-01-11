@@ -101,6 +101,9 @@ class BISSPro(Screen):
             }, -1
         )
 
+        # تشغيل التحديث التلقائي عند فتح البلجن
+        self.autoUpdateKeysFromGit()
+
     def okPressed(self):
         idx = self["menu"].getSelectionIndex()
         if idx == 0: self.addKey()
@@ -108,7 +111,7 @@ class BISSPro(Screen):
         elif idx == 2: self.deleteKey()
         elif idx == 3: self.importUSB()
         elif idx == 4: self.restoreBackup()
-        elif idx == 5: self.updateKeysFromGit()
+        elif idx == 5: self.autoUpdateKeysFromGit()
         elif idx == 6: self.restartOscam()
         elif idx == 7: self.about()
         else: self.close()
@@ -201,13 +204,13 @@ class BISSPro(Screen):
         log("Backup restored")
         self.session.open(MessageBox, _("Backup restored"), MessageBox.TYPE_INFO)
 
-    # ---------------------- سحب الشفرات من GitHub ----------------------
-    def updateKeysFromGit(self):
+    # ---------------------- GitHub Update تلقائي ----------------------
+    def autoUpdateKeysFromGit(self):
         GIT_RAW_URL = "https://raw.githubusercontent.com/YourUsername/YourRepo/main/SoftCam.Key"
 
         if os.path.exists(BISS_FILE):
             os.system("cp %s %s" % (BISS_FILE, BACKUP_PATH))
-            log("Backup created before Git update")
+            log("Backup created before GitHub auto update")
 
         try:
             response = urllib.request.urlopen(GIT_RAW_URL)
@@ -229,15 +232,15 @@ class BISSPro(Screen):
                     for nk in new_keys:
                         f.write("\n"+nk)
                 log("Added %d new keys from GitHub" % len(new_keys))
-                self.session.open(MessageBox, _("Added %d new keys from GitHub") % len(new_keys), MessageBox.TYPE_INFO)
             else:
-                self.session.open(MessageBox, _("No new keys to add from GitHub"), MessageBox.TYPE_INFO)
+                log("No new keys from GitHub")
 
+            # إعادة تشغيل Oscam/NCAM تلقائي بعد تحديث
             self.restartOscam()
-            log("Oscam restarted after GitHub update")
+            log("Oscam/NCAM restarted after GitHub update")
+
         except Exception as e:
-            log("Error updating keys from GitHub: %s" % str(e))
-            self.session.open(MessageBox, _("Error updating keys from GitHub:\n%s") % str(e), MessageBox.TYPE_ERROR)
+            log("Error in GitHub auto update: %s" % str(e))
 
     # ---------------------- إعادة تشغيل Oscam / NCAM ----------------------
     def restartOscam(self):
@@ -245,11 +248,11 @@ class BISSPro(Screen):
         os.system("killall -9 ncam 2>/dev/null")
         time.sleep(1)
         os.system("oscam &")
-        log("Oscam restarted")
+        log("Oscam/NCAM restarted")
 
     # ---------------------- About ----------------------
     def about(self):
-        self.session.open(MessageBox, "BISS Pro Manager\nVersion 1.3\nOpenATV 7.6\nVU+", MessageBox.TYPE_INFO)
+        self.session.open(MessageBox, "BISS Pro Manager\nVersion 1.4\nOpenATV 7.6\nVU+", MessageBox.TYPE_INFO)
 
 # ---------------------- Viewer للشفرات ----------------------
 class KeysViewer(Screen):
@@ -277,7 +280,7 @@ def main(session, **kwargs):
 def Plugins(**kwargs):
     return PluginDescriptor(
         name="BISS Pro Manager",
-        description="Professional BISS/BISS-E Manager with GitHub update",
+        description="Professional BISS/BISS-E Manager with GitHub auto update",
         where=PluginDescriptor.WHERE_PLUGINMENU,
         icon="plugin.png",
         fnc=main
