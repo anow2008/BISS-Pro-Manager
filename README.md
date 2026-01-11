@@ -15,4 +15,16 @@ BISS Pro Manager هو بلجن احترافي لإدارة شفرات BISS / BIS
 - ✅ إعادة تشغيل Oscam مباشرة من البلجن
 - ✅ ترجمة عربي + إنجليزي
 
+---
 
+## تركيب البلجن على الرسيفر
+
+### 1️⃣ تنزيل البلجن من GitHub وتنصيبه تلقائيًا
+
+انسخ السطر التالي في Terminal أو SSH على الرسيفر:
+
+```bash
+cd /usr/lib/enigma2/python/Plugins/Extensions/ && \
+git clone https://github.com/anow2008/enigma2-plugin-extensions-bisspro.git && \
+chmod -R 755 enigma2-plugin-extensions-bisspro && \
+killall -9 enigma2 && enigma2 &
