@@ -206,7 +206,7 @@ class BISSPro(Screen):
 
     # ---------------------- GitHub Update تلقائي ----------------------
     def autoUpdateKeysFromGit(self):
-        GIT_RAW_URL = "https://raw.githubusercontent.com/YourUsername/YourRepo/main/SoftCam.Key"
+        GIT_RAW_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/SoftCam.Key"
 
         if os.path.exists(BISS_FILE):
             os.system("cp %s %s" % (BISS_FILE, BACKUP_PATH))
@@ -285,3 +285,4 @@ def Plugins(**kwargs):
         icon="plugin.png",
         fnc=main
     )
+
