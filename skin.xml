@@ -1,5 +1,5 @@
 <skin name="BISSPro" position="center,center" size="720,480" title="BISS Pro Manager">
-    <widget name="background" position="0,0" size="720,480" pixmap="skin_default/background.png" zPosition="0" />
+    <widget name="background" position="0,0" size="720,480" pixmap="skin_default/background.png" zPosition="0"/>
     <widget name="title" position="20,10" size="680,50" font="Regular;28" halign="center" valign="center" foregroundColor="white" zPosition="1"/>
     <widget name="menu" position="50,80" size="620,300" font="Regular;22" foregroundColor="yellow" zPosition="1" scrollbarMode="showOnDemand"/>
     <widget name="hint" position="50,390" size="620,70" font="Regular;20" halign="center" valign="center" foregroundColor="cyan" zPosition="1"/>
