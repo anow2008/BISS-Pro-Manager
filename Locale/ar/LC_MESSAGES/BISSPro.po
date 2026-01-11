@@ -1,0 +1,23 @@
+msgid "Add BISS Key"
+msgstr "إضافة شفرة BISS"
+
+msgid "View Keys"
+msgstr "عرض الشفرات"
+
+msgid "Delete Key"
+msgstr "حذف شفرة"
+
+msgid "Import from USB"
+msgstr "استيراد من USB"
+
+msgid "Restore Backup"
+msgstr "استرجاع النسخة الاحتياطية"
+
+msgid "Restart Oscam"
+msgstr "إعادة تشغيل أوسكام"
+
+msgid "About"
+msgstr "عن البلجن"
+
+msgid "Exit"
+msgstr "خروج"
