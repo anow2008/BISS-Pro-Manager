@@ -7,7 +7,7 @@ from Components.Label import Label
 from Components.MenuList import MenuList
 from Tools.Directories import resolveFilename, SCOPE_PLUGINS, fileExists
 from gettext import bindtextdomain, dgettext
-import os, time
+import os, time, urllib.request
 from Crypto.Cipher import AES
 import base64
 
@@ -21,7 +21,6 @@ USB_PATH = "/media/usb/SoftCam.Key"
 BACKUP_PATH = "/etc/tuxbox/config/SoftCam.Key.bak"
 LOG_FILE = "/usr/lib/enigma2/python/Plugins/Extensions/BISSPro/debug.log"
 SKIN_FILE = "/usr/lib/enigma2/python/Plugins/Extensions/BISSPro/skin.xml"
-
 SECRET_KEY = b"MySecretKey12345"
 DEBUG_MODE = True
 
@@ -45,6 +44,7 @@ def decrypt_line(enc_line):
     decrypted = cipher.decrypt(decoded).decode().rstrip()
     return decrypted
 
+# ---------------------- واجهة إضافة الشفرة StarSat ----------------------
 class AddKeyScreen(Screen):
     skin = """
     <screen name="AddKeyScreen" position="center,center" size="600,200" title="Add BISS Key">
@@ -66,6 +66,7 @@ class AddKeyScreen(Screen):
             self.callback(key)
         self.close()
 
+# ---------------------- Main Plugin Screen ----------------------
 class BISSPro(Screen):
     def __init__(self, session):
         if fileExists(SKIN_FILE):
@@ -81,6 +82,7 @@ class BISSPro(Screen):
             _("Delete Key"),
             _("Import from USB"),
             _("Restore Backup"),
+            _("Update Keys from GitHub"),
             _("Restart Oscam"),
             _("About"),
             _("Exit")
@@ -106,8 +108,9 @@ class BISSPro(Screen):
         elif idx == 2: self.deleteKey()
         elif idx == 3: self.importUSB()
         elif idx == 4: self.restoreBackup()
-        elif idx == 5: self.restartOscam()
-        elif idx == 6: self.about()
+        elif idx == 5: self.updateKeysFromGit()
+        elif idx == 6: self.restartOscam()
+        elif idx == 7: self.about()
         else: self.close()
 
     def getSID(self):
@@ -118,6 +121,7 @@ class BISSPro(Screen):
         name = info.getName() or "Unknown"
         return sid, name
 
+    # ---------------------- إضافة شفرة يدوي ----------------------
     def addKey(self):
         sid, name = self.getSID()
         if not sid:
@@ -141,4 +145,140 @@ class BISSPro(Screen):
         log("Key added")
         self.session.open(MessageBox, _("Key saved successfully"), MessageBox.TYPE_INFO)
 
-    # باقي الدوال showKeys, deleteKey, importUSB, restoreBackup, restartOscam, about كما هي...
+    # ---------------------- استعراض الشفرات ----------------------
+    def showKeys(self):
+        try:
+            with open(BISS_FILE,"r") as f:
+                lines = f.readlines()
+            data = [decrypt_line(l.strip()) for l in lines if l.strip()]
+        except:
+            data = [_("No keys found")]
+        self.session.open(KeysViewer, data)
+
+    # ---------------------- حذف شفرة ----------------------
+    def deleteKey(self):
+        try:
+            with open(BISS_FILE,"r") as f:
+                lines = f.readlines()
+            self.lines = [l.strip() for l in lines if l.strip()]
+        except:
+            self.lines = []
+
+        if not self.lines:
+            self.session.open(MessageBox, _("No keys to delete"), MessageBox.TYPE_INFO)
+            return
+        self.session.openWithCallback(self.confirmDelete, KeysViewer, self.lines, True)
+
+    def confirmDelete(self, line):
+        if not line: return
+        enc_line = encrypt_line(line)
+        with open(BISS_FILE,"r") as f:
+            data = f.read()
+        data = data.replace(enc_line,"")
+        with open(BISS_FILE,"w") as f:
+            f.write(data)
+        self.restartOscam()
+        log("Key deleted")
+        self.session.open(MessageBox, _("Key deleted"), MessageBox.TYPE_INFO)
+
+    # ---------------------- استيراد من USB ----------------------
+    def importUSB(self):
+        if not os.path.exists(USB_PATH):
+            self.session.open(MessageBox, _("SoftCam.Key not found on USB"), MessageBox.TYPE_ERROR)
+            return
+        os.system("cp %s %s" % (USB_PATH,BISS_FILE))
+        self.restartOscam()
+        log("Imported SoftCam.Key from USB")
+        self.session.open(MessageBox, _("Imported from USB ✅"), MessageBox.TYPE_INFO)
+
+    # ---------------------- استرجاع Backup ----------------------
+    def restoreBackup(self):
+        if not os.path.exists(BACKUP_PATH):
+            self.session.open(MessageBox, _("No backup found"), MessageBox.TYPE_ERROR)
+            return
+        os.system("cp %s %s" % (BACKUP_PATH,BISS_FILE))
+        self.restartOscam()
+        log("Backup restored")
+        self.session.open(MessageBox, _("Backup restored"), MessageBox.TYPE_INFO)
+
+    # ---------------------- سحب الشفرات من GitHub ----------------------
+    def updateKeysFromGit(self):
+        GIT_RAW_URL = "https://raw.githubusercontent.com/YourUsername/YourRepo/main/SoftCam.Key"
+
+        if os.path.exists(BISS_FILE):
+            os.system("cp %s %s" % (BISS_FILE, BACKUP_PATH))
+            log("Backup created before Git update")
+
+        try:
+            response = urllib.request.urlopen(GIT_RAW_URL)
+            git_keys = response.read().decode('utf-8').splitlines()
+
+            existing_keys = []
+            if os.path.exists(BISS_FILE):
+                with open(BISS_FILE,"r") as f:
+                    existing_keys = [l.strip() for l in f.readlines() if l.strip()]
+
+            new_keys = []
+            for key in git_keys:
+                key = key.strip()
+                if key and key not in existing_keys:
+                    new_keys.append(key)
+
+            if new_keys:
+                with open(BISS_FILE,"a") as f:
+                    for nk in new_keys:
+                        f.write("\n"+nk)
+                log("Added %d new keys from GitHub" % len(new_keys))
+                self.session.open(MessageBox, _("Added %d new keys from GitHub") % len(new_keys), MessageBox.TYPE_INFO)
+            else:
+                self.session.open(MessageBox, _("No new keys to add from GitHub"), MessageBox.TYPE_INFO)
+
+            self.restartOscam()
+            log("Oscam restarted after GitHub update")
+        except Exception as e:
+            log("Error updating keys from GitHub: %s" % str(e))
+            self.session.open(MessageBox, _("Error updating keys from GitHub:\n%s") % str(e), MessageBox.TYPE_ERROR)
+
+    # ---------------------- إعادة تشغيل Oscam / NCAM ----------------------
+    def restartOscam(self):
+        os.system("killall -9 oscam 2>/dev/null")
+        os.system("killall -9 ncam 2>/dev/null")
+        time.sleep(1)
+        os.system("oscam &")
+        log("Oscam restarted")
+
+    # ---------------------- About ----------------------
+    def about(self):
+        self.session.open(MessageBox, "BISS Pro Manager\nVersion 1.3\nOpenATV 7.6\nVU+", MessageBox.TYPE_INFO)
+
+# ---------------------- Viewer للشفرات ----------------------
+class KeysViewer(Screen):
+    skin = """
+    <screen position="center,center" size="720,480" title="BISS Keys">
+        <widget name="list" position="20,20" size="680,440"/>
+    </screen>
+    """
+    def __init__(self, session, data, selectable=False):
+        Screen.__init__(self, session)
+        self.selectable = selectable
+        self["list"] = MenuList(data)
+        self["actions"] = ActionMap(["OkCancelActions"], {"ok": self.ok, "cancel": self.close}, -1)
+
+    def ok(self):
+        if self.selectable:
+            self.close(self["list"].getCurrent())
+        else:
+            self.close()
+
+# ---------------------- Main Plugin ----------------------
+def main(session, **kwargs):
+    session.open(BISSPro)
+
+def Plugins(**kwargs):
+    return PluginDescriptor(
+        name="BISS Pro Manager",
+        description="Professional BISS/BISS-E Manager with GitHub update",
+        where=PluginDescriptor.WHERE_PLUGINMENU,
+        icon="plugin.png",
+        fnc=main
+    )
