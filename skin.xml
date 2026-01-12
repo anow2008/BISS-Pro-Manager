@@ -1,7 +1,6 @@
-<skin name="BISSPro" position="center,center" size="720,480" title="BISS Pro Manager">
-    <widget name="background" position="0,0" size="720,480" pixmap="skin_default/background.png" zPosition="0"/>
-    <widget name="title" position="20,10" size="680,50" font="Regular;28" halign="center" valign="center" foregroundColor="white" zPosition="1"/>
-    <widget name="menu" position="50,80" size="620,300" font="Regular;22" foregroundColor="yellow" zPosition="1" scrollbarMode="showOnDemand"/>
-    <widget name="hint" position="50,390" size="620,70" font="Regular;20" halign="center" valign="center" foregroundColor="cyan" zPosition="1"/>
-    <ePixmap position="40,75" size="640,310" pixmap="skin_default/frame.png" zPosition="0"/>
-</skin>
+<screen name="BISSPro" position="center,center" size="640,480" title="BISS Pro Manager">
+    <eLabel position="0,0" size="640,480" backgroundColor="#1a1a1a" zPosition="1"/>
+    <widget name="menu" position="30,30" size="580,360" font="Regular;22" foregroundColor="#ffffff" backgroundColor="#333333" zPosition="2"/>
+    <widget name="hint" position="30,410" size="580,50" font="Regular;18" halign="center" foregroundColor="#ffff00" zPosition="2"/>
+    <eLabel position="25,25" size="590,370" backgroundColor="#444444" zPosition="0"/>
+</screen>
