@@ -6,14 +6,30 @@ from Components.Label import Label
 from Components.MenuList import MenuList
 from Tools.Directories import fileExists, resolveFilename, SCOPE_PLUGINS
 from gettext import bindtextdomain, dgettext
-import os, time, urllib.request
+import os, time
 
 # ------------------------- Paths -------------------------
-BISS_FILE = "/etc/tuxbox/config/SoftCam.Key"
-BACKUP_FILE = "/etc/tuxbox/config/SoftCam.Key.bak"
+# البحث التلقائي عن SoftCam.Key
+POSSIBLE_SOFTCAM_PATHS = [
+    "/etc/tuxbox/config/SoftCam.Key",
+    "/var/keys/SoftCam.Key",
+    "/usr/local/etc/SoftCam.Key"
+]
+BISS_FILE = next((p for p in POSSIBLE_SOFTCAM_PATHS if os.path.exists(p)), POSSIBLE_SOFTCAM_PATHS[0])
+BACKUP_FILE = BISS_FILE + ".bak"
 UPDATE_FLAG = "/tmp/bisspro_last_update"
 GITHUB_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
 SKIN_FILE = "/usr/lib/enigma2/python/Plugins/Extensions/BISSPro/skin.xml"
+
+# البحث عن OSCam / NCam
+if os.path.exists("/usr/bin/oscam"):
+    SOFTCAM_BINARY = "/usr/bin/oscam"
+elif os.path.exists("/usr/bin/ncam"):
+    SOFTCAM_BINARY = "/usr/bin/ncam"
+elif os.path.exists("/usr/local/bin/oscam"):
+    SOFTCAM_BINARY = "/usr/local/bin/oscam"
+else:
+    SOFTCAM_BINARY = None
 
 # ------------------------- Translation -------------------------
 PluginLanguageDomain = "BISSPro"
@@ -89,7 +105,6 @@ class HexKeyInput(Screen):
             return
         self.callback(self.key)
         self.close()
-
 
 # ================= MAIN PLUGIN =================
 class BISSPro(Screen):
@@ -224,22 +239,24 @@ class BISSPro(Screen):
             with open(UPDATE_FLAG) as f:
                 if f.read().strip()==today: return
         try:
+            import urllib.request
             data=urllib.request.urlopen(GITHUB_URL,timeout=8).read().decode("utf-8")
             if os.path.exists(BISS_FILE): os.system(f"cp {BISS_FILE} {BACKUP_FILE}")
             with open(BISS_FILE,"w") as f: f.write(data)
             with open(UPDATE_FLAG,"w") as f: f.write(today)
             self.restartSoftcam()
-        except: pass
+        except Exception as e:
+            self.session.open(MessageBox, _("GitHub update failed:\n%s") % str(e), MessageBox.TYPE_ERROR)
 
     # ---------- Restart OSCam / NCam ----------
     def restartSoftcam(self):
         os.system("killall -9 oscam 2>/dev/null")
         os.system("killall -9 ncam 2>/dev/null")
         time.sleep(1)
-        if os.path.exists("/usr/bin/oscam"):
-            os.system("oscam &")
-        elif os.path.exists("/usr/bin/ncam"):
-            os.system("ncam &")
+        if SOFTCAM_BINARY:
+            os.system(f"{SOFTCAM_BINARY} &")
+        else:
+            self.session.open(MessageBox, _("SoftCam binary not found!"), MessageBox.TYPE_ERROR)
 
     # ---------- OK ----------
     def okPressed(self):
@@ -250,7 +267,6 @@ class BISSPro(Screen):
         elif idx==3: self.autoUpdateGit()
         elif idx==4: self.restartSoftcam()
         else: self.close()
-
 
 # ================= VIEWER =================
 class KeysViewer(Screen):
@@ -268,7 +284,6 @@ class KeysViewer(Screen):
         if self.select: self.close(self["list"].getCurrent())
         else: self.close()
 
-
 # ================= PLUGIN INIT =================
 def main(session,**kwargs):
     session.open(BISSPro)
@@ -280,5 +295,3 @@ def Plugins(**kwargs):
         where=PluginDescriptor.WHERE_PLUGINMENU,
         fnc=main
     )
-
-
