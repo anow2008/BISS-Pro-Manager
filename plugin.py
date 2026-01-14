@@ -12,7 +12,7 @@ import os, time, urllib.request
 BISS_FILE = "/etc/tuxbox/config/SoftCam.Key"
 BACKUP_FILE = "/etc/tuxbox/config/SoftCam.Key.bak"
 UPDATE_FLAG = "/tmp/bisspro_last_update"
-GITHUB_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/softcam.key"
+GITHUB_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
 SKIN_FILE = "/usr/lib/enigma2/python/Plugins/Extensions/BISSPro/skin.xml"
 
 # ------------------------- Translation -------------------------
@@ -280,4 +280,5 @@ def Plugins(**kwargs):
         where=PluginDescriptor.WHERE_PLUGINMENU,
         fnc=main
     )
+
 
