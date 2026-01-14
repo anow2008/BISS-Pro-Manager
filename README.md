@@ -1,7 +1,4 @@
-# BISS Pro Manager
-
-## وصف البلجن
-BISS Pro Manager 
+BISS Pro 
 ## تركيب البلجن على الرسيفر
 
 ### 1️⃣ تنزيل البلجن من GitHub وتنصيبه تلقائيًا
