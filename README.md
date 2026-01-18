@@ -2,7 +2,7 @@ BISS Pro
 ## تركيب البلجن على الرسيفر
 
 
-✅ أمر واحد تثبيت بـ wget
+✅ أمر واحد تثبيت 
 wget -qO- https://raw.githubusercontent.com/anow2008/BissPor/main/install.sh | sh
 
 
