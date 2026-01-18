@@ -2,12 +2,12 @@ from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
 from Screens.MessageBox import MessageBox
 from Components.ActionMap import ActionMap
-from Components.Label import Label
 from Components.MenuList import MenuList
+from Components.Label import Label
 from Tools.Directories import fileExists
-import os, time, urllib.request
+import os, time, urllib.request, shutil
 
-# ---------------- PATHS ----------------
+# ---------- PATHS ----------
 SOFTCAM_PATHS = [
     "/etc/tuxbox/config/SoftCam.Key",
     "/var/keys/SoftCam.Key",
@@ -15,33 +15,30 @@ SOFTCAM_PATHS = [
 ]
 BISS_FILE = next((p for p in SOFTCAM_PATHS if os.path.exists(p)), SOFTCAM_PATHS[0])
 BACKUP_FILE = BISS_FILE + ".bak"
-UPDATE_FLAG = "/tmp/bisspro_last_update"
+LOG_FILE = "/tmp/bisspro.log"
+USB_PATH = "/media/usb/SoftCam.Key"
 GITHUB_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
 
-SOFTCAM_BINARY = None
-for p in ("/usr/bin/oscam", "/usr/bin/ncam", "/usr/local/bin/oscam"):
-    if os.path.exists(p):
-        SOFTCAM_BINARY = p
-        break
+SOFTCAM_BINARY = next(
+    (p for p in ["/usr/bin/oscam", "/usr/bin/ncam", "/usr/local/bin/oscam"] if os.path.exists(p)),
+    None
+)
 
-# ---------------- HEX INPUT ----------------
+def log(msg):
+    with open(LOG_FILE, "a") as f:
+        f.write("[%s] %s\n" % (time.strftime("%H:%M:%S"), msg))
+
+# ---------- HEX INPUT ----------
 class HexKeyInput(Screen):
-    def __init__(self, session, callback, existing_key=""):
+    def __init__(self, session, callback, existing=""):
         Screen.__init__(self, session)
         self.callback = callback
-        self.key = existing_key.upper()
-
-        self.keys = [
-            "1","2","3","4",
-            "5","6","7","8",
-            "9","A","B","C",
-            "D","E","F","0",
-            "DEL","ADD"
-        ]
+        self.key = existing.upper()
+        self.keys = ["1","2","3","4","5","6","7","8","9","A","B","C","D","E","F","0","DEL","ADD"]
 
         self["key"] = Label("")
         self["list"] = MenuList(self.keys, enableWrapAround=True)
-        self["hint"] = Label("RED=DEL  YELLOW=ADD  EXIT=Cancel")
+        self["hint"] = Label("RED=DEL  YELLOW=SAVE  EXIT=Cancel")
 
         self["actions"] = ActionMap(
             ["OkCancelActions","ColorActions","NumberActions"],
@@ -50,23 +47,20 @@ class HexKeyInput(Screen):
                 "red": self.delete,
                 "yellow": self.save,
                 "cancel": self.close,
-                **{str(i): lambda x=str(i): self.addChar(x) for i in range(10)}
+                **{str(i): lambda x=str(i): self.add(x) for i in range(10)}
             }, -1
         )
         self.update()
 
     def ok(self):
-        sel = self["list"].getCurrent()
-        if sel == "DEL":
-            self.delete()
-        elif sel == "ADD":
-            self.save()
-        else:
-            self.addChar(sel)
+        s = self["list"].getCurrent()
+        if s == "DEL": self.delete()
+        elif s == "ADD": self.save()
+        else: self.add(s)
 
-    def addChar(self, ch):
+    def add(self, c):
         if len(self.key) < 32:
-            self.key += ch
+            self.key += c
             self.update()
 
     def delete(self):
@@ -74,8 +68,8 @@ class HexKeyInput(Screen):
         self.update()
 
     def update(self):
-        view = self.key.ljust(32,"-")
-        self["key"].setText(" ".join(view[i:i+4] for i in range(0, 32, 4)))
+        v = self.key.ljust(32, "-")
+        self["key"].setText(" ".join(v[i:i+4] for i in range(0, 32, 4)))
 
     def save(self):
         if len(self.key) not in (16, 32):
@@ -84,146 +78,131 @@ class HexKeyInput(Screen):
         self.callback(self.key)
         self.close()
 
-# ---------------- MAIN ----------------
+# ---------- MAIN ----------
 class BISSPro(Screen):
-    skin = """
-    <screen position="center,center" size="720,480" title="BISS Pro Manager">
-        <widget name="menu" position="40,60" size="640,360"/>
-    </screen>"""
-
     def __init__(self, session):
         Screen.__init__(self, session)
         self.session = session
 
         self.menu = [
-            "Add / Edit BISS Key (Auto Feed)",
+            "Add / Edit BISS Key",
             "View Keys",
             "Delete Key",
-            "Update from GitHub (Smart Merge)",
+            "Smart Merge from GitHub",
+            "Export Keys to USB",
+            "Import Keys from USB",
+            "Restore Backup",
             "Restart Softcam",
             "Exit"
         ]
         self["menu"] = MenuList(self.menu)
+        self["status"] = Label("Ready")
 
         self["actions"] = ActionMap(
             ["OkCancelActions"],
-            {"ok": self.ok, "cancel": self.close},
-            -1
+            {"ok": self.ok, "cancel": self.close}, -1
         )
 
-    def getServiceIDs(self):
+    # ---------- SERVICE ----------
+    def getIDs(self):
         s = self.session.nav.getCurrentService()
-        if not s:
-            return None
+        if not s: return None
         i = s.info()
         return {
-            "sid":  "%04X" % i.getInfo(i.sSID),
+            "sid": "%04X" % i.getInfo(i.sSID),
             "tsid": "%04X" % i.getInfo(i.sTSID),
             "onid": "%04X" % i.getInfo(i.sONID),
             "name": i.getName().strip()
         }
 
+    # ---------- ADD ----------
     def addKey(self):
-        ids = self.getServiceIDs()
+        ids = self.getIDs()
         if not ids: return
         self.session.open(
             HexKeyInput,
-            lambda k: self.saveKey(
-                ids["sid"], ids["tsid"], ids["onid"], k, ids["name"]
-            )
+            lambda k: self.saveKey(ids, k)
         )
 
-    def saveKey(self, sid, tsid, onid, key, name):
+    def saveKey(self, ids, key):
         mode = "00" if len(key)==16 else "01"
-        date = time.strftime("%Y-%m-%d")
-        line = f"F {sid} {tsid} {onid} {mode} {key} ; {name} | {date}"
+        line = f"F {ids['sid']} {ids['tsid']} {ids['onid']} {mode} {key} ; {ids['name']} | {time.strftime('%Y-%m-%d')}"
+        shutil.copy(BISS_FILE, BACKUP_FILE)
 
-        if os.path.exists(BISS_FILE):
-            os.system(f"cp {BISS_FILE} {BACKUP_FILE}")
+        lines = [l for l in open(BISS_FILE) if not l.startswith(f"F {ids['sid']} {ids['tsid']} {ids['onid']}")]
+        lines.append(line+"\n")
+        open(BISS_FILE,"w").writelines(lines)
+        log("Key saved")
+        self.restart()
 
-        lines = []
-        if os.path.exists(BISS_FILE):
-            for l in open(BISS_FILE):
-                if not l.startswith(f"F {sid} {tsid} {onid}"):
-                    lines.append(l)
-        lines.append(line + "\n")
+    # ---------- VIEW ----------
+    def view(self):
+        self.session.open(MessageBox, open(BISS_FILE).read(), MessageBox.TYPE_INFO)
 
-        with open(BISS_FILE, "w") as f:
-            f.writelines(lines)
-
-        self.restartSoftcam()
-
-    def smartMergeGit(self):
-        today = time.strftime("%Y%m%d")
-        if fileExists(UPDATE_FLAG) and open(UPDATE_FLAG).read().strip() == today:
-            return
-        try:
-            data = urllib.request.urlopen(GITHUB_URL, timeout=8).read().decode("utf-8")
-            merged = {}
-
-            if os.path.exists(BISS_FILE):
-                for l in open(BISS_FILE):
-                    if l.startswith("F "):
-                        p = l.split()
-                        k = f"{p[1]} {p[2]} {p[3]}"
-                        merged[k] = l.strip()
-
-            for l in data.splitlines():
-                if l.startswith("F "):
-                    p = l.split()
-                    k = f"{p[1]} {p[2]} {p[3]}"
-                    merged[k] = l.strip()
-
-            if os.path.exists(BISS_FILE):
-                os.system(f"cp {BISS_FILE} {BACKUP_FILE}")
-
-            with open(BISS_FILE,"w") as f:
-                for v in merged.values():
-                    f.write(v + "\n")
-
-            open(UPDATE_FLAG,"w").write(today)
-            self.restartSoftcam()
-        except Exception as e:
-            self.session.open(MessageBox, str(e), MessageBox.TYPE_ERROR)
-
-    def viewKeys(self):
-        data = open(BISS_FILE).read() if os.path.exists(BISS_FILE) else "No Keys"
-        self.session.open(MessageBox, data, MessageBox.TYPE_INFO)
-
-    def deleteKey(self):
-        if not os.path.exists(BISS_FILE): return
+    # ---------- DELETE ----------
+    def delete(self):
         lines = open(BISS_FILE).read().splitlines()
         self.session.openWithCallback(self.doDelete, MenuList, lines)
 
-    def doDelete(self, line):
-        if not line: return
-        with open(BISS_FILE,"w") as f:
-            f.writelines([l+"\n" for l in open(BISS_FILE).read().splitlines() if l!=line])
-        self.restartSoftcam()
+    def doDelete(self, l):
+        if not l: return
+        shutil.copy(BISS_FILE, BACKUP_FILE)
+        open(BISS_FILE,"w").writelines([x+"\n" for x in open(BISS_FILE).read().splitlines() if x!=l])
+        log("Key deleted")
+        self.restart()
 
-    def restartSoftcam(self):
-        os.system("killall oscam 2>/dev/null")
-        os.system("killall ncam 2>/dev/null")
+    # ---------- MERGE ----------
+    def mergeGit(self):
+        data = urllib.request.urlopen(GITHUB_URL).read().decode()
+        merged = {}
+
+        for l in open(BISS_FILE):
+            if l.startswith("F "):
+                p=l.split(); merged[f"{p[1]} {p[2]} {p[3]}"]=l.strip()
+
+        for l in data.splitlines():
+            if l.startswith("F "):
+                p=l.split(); merged[f"{p[1]} {p[2]} {p[3]}"]=l.strip()
+
+        shutil.copy(BISS_FILE, BACKUP_FILE)
+        open(BISS_FILE,"w").write("\n".join(merged.values())+"\n")
+        log("GitHub merged")
+        self.restart()
+
+    # ---------- USB ----------
+    def exportUSB(self):
+        shutil.copy(BISS_FILE, USB_PATH)
+        self["status"].setText("Exported to USB")
+
+    def importUSB(self):
+        if os.path.exists(USB_PATH):
+            shutil.copy(USB_PATH, BISS_FILE)
+            self.restart()
+
+    # ---------- SOFTCAM ----------
+    def restart(self):
+        os.system("killall oscam 2>/dev/null; killall ncam 2>/dev/null")
         time.sleep(1)
         if SOFTCAM_BINARY:
-            os.system(f"{SOFTCAM_BINARY} &")
+            os.system(SOFTCAM_BINARY+" &")
 
+    # ---------- OK ----------
     def ok(self):
         i = self["menu"].getSelectionIndex()
-        if   i==0: self.addKey()
-        elif i==1: self.viewKeys()
-        elif i==2: self.deleteKey()
-        elif i==3: self.smartMergeGit()
-        elif i==4: self.restartSoftcam()
-        else: self.close()
+        [
+            self.addKey, self.view, self.delete,
+            self.mergeGit, self.exportUSB, self.importUSB,
+            lambda: shutil.copy(BACKUP_FILE,BISS_FILE),
+            self.restart, self.close
+        ][i]()
 
-# ---------------- INIT ----------------
+# ---------- INIT ----------
 def main(session, **kwargs):
     session.open(BISSPro)
 
 def Plugins(**kwargs):
     return PluginDescriptor(
-        name="BISS Pro Manager",
+        name="BISS Pro Manager v2",
         where=PluginDescriptor.WHERE_PLUGINMENU,
         fnc=main
     )
