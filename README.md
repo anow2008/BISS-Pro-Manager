@@ -8,5 +8,6 @@ BISS Pro
 ```bash
 cd /usr/lib/enigma2/python/Plugins/Extensions/ && \
 git clone https://github.com/anow2008/BissPor.git && \
-chmod -R 755 enigma2-plugin-extensions-bisspro && \
+chmod -R 755 BissPor && \
 killall -9 enigma2 && enigma2 &
+
