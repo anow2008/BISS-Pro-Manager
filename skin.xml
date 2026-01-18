@@ -1,6 +1,11 @@
-<screen name="BISSPro" position="center,center" size="640,480" title="BISS Pro Manager">
-    <eLabel position="0,0" size="640,480" backgroundColor="#1a1a1a" zPosition="1"/>
-    <widget name="menu" position="30,30" size="580,360" font="Regular;22" foregroundColor="#ffffff" backgroundColor="#333333" zPosition="2"/>
-    <widget name="hint" position="30,410" size="580,50" font="Regular;18" halign="center" foregroundColor="#ffff00" zPosition="2"/>
-    <eLabel position="25,25" size="590,370" backgroundColor="#444444" zPosition="0"/>
-</screen>
+<skin>
+    <screen name="BISSPro" position="center,center" size="720,480" title="BISS Pro Manager">
+        <widget name="menu" position="40,60" size="640,360" scrollbarMode="showOnDemand"/>
+    </screen>
+
+    <screen name="HexKeyInput" position="center,center" size="560,220" title="Enter BISS Key">
+        <widget name="key" position="40,60" size="480,40" halign="center"/>
+        <widget name="list" position="100,120" size="360,60"/>
+        <widget name="hint" position="40,180" size="480,30" halign="center"/>
+    </screen>
+</skin>
