@@ -1,19 +1,14 @@
-msgid ""
-msgstr ""
-"Language: ar\n"
-"Content-Type: text/plain; charset=UTF-8\n"
-
-msgid "Add / Edit BISS Key (Auto Feed)"
+msgid "Add / Edit BISS Key"
 msgstr "إضافة / تعديل مفتاح BISS"
 
-msgid "View Keys"
-msgstr "عرض المفاتيح"
+msgid "Smart Merge from GitHub"
+msgstr "تحديث ذكي من GitHub"
 
-msgid "Delete Key"
-msgstr "حذف مفتاح"
+msgid "Export Keys"
+msgstr "تصدير المفاتيح"
 
-msgid "Update from GitHub (Smart Merge)"
-msgstr "تحديث من GitHub (دمج ذكي)"
+msgid "Import Keys"
+msgstr "استيراد المفاتيح"
 
-msgid "Restart Softcam"
-msgstr "إعادة تشغيل السوفتكام"
+msgid "Restore Backup"
+msgstr "استرجاع نسخة احتياطية"
