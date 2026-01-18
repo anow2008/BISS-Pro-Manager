@@ -1,23 +1,19 @@
-msgid "Add BISS Key"
-msgstr "إضافة شفرة BISS"
+msgid ""
+msgstr ""
+"Language: ar\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Add / Edit BISS Key (Auto Feed)"
+msgstr "إضافة / تعديل مفتاح BISS"
 
 msgid "View Keys"
-msgstr "عرض الشفرات"
+msgstr "عرض المفاتيح"
 
 msgid "Delete Key"
-msgstr "حذف شفرة"
+msgstr "حذف مفتاح"
 
-msgid "Import from USB"
-msgstr "استيراد من USB"
+msgid "Update from GitHub (Smart Merge)"
+msgstr "تحديث من GitHub (دمج ذكي)"
 
-msgid "Restore Backup"
-msgstr "استرجاع النسخة الاحتياطية"
-
-msgid "Restart Oscam"
-msgstr "إعادة تشغيل أوسكام"
-
-msgid "About"
-msgstr "عن البلجن"
-
-msgid "Exit"
-msgstr "خروج"
+msgid "Restart Softcam"
+msgstr "إعادة تشغيل السوفتكام"
