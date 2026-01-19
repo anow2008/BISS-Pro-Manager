@@ -1,4 +1,15 @@
-<screen name="BISSPro" position="center,center" size="900,600" title="BISS Pro">
-    <widget name="menu" position="10,10" size="880,540" font="Regular;22" />
-    <widget name="status" position="10,560" size="880,40" font="Regular;20" />
-</screen>
+<?xml version="1.0" encoding="UTF-8"?>
+<skin>
+
+    <screen name="BISSPro" position="center,center" size="900,600">
+        <widget name="menu" position="50,90" size="800,420"
+            font="Regular;24"
+            foregroundColor="#FFFFFF"
+            backgroundColor="#000000"/>
+        <widget name="status" position="50,530" size="800,40"
+            font="Regular;20"
+            foregroundColor="#00FF00"
+            backgroundColor="#000000"/>
+    </screen>
+
+</skin>
