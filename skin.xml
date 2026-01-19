@@ -1,12 +1,16 @@
-<skin>
-    <screen name="BISSPro" position="center,center" size="750,520" title="BISS Pro Manager">
-        <widget name="menu" position="30,50" size="690,420" scrollbarMode="showOnDemand"/>
-        <widget name="status" position="30,480" size="690,30" halign="center"/>
+<skins>
+    <screen name="ScrollText" position="center,center" size="900,600">
+        <widget name="text" position="10,10" size="880,520" font="Regular;22"/>
+        <widget name="hint" position="10,540" size="880,40" font="Regular;18"/>
     </screen>
 
-    <screen name="HexKeyInput" position="center,center" size="600,260" title="Enter BISS Key">
-        <widget name="key" position="40,50" size="520,40" halign="center" font="Regular;24"/>
-        <widget name="list" position="120,110" size="360,80"/>
-        <widget name="hint" position="40,210" size="520,30" halign="center"/>
+    <screen name="HexKeyInput" position="center,center" size="500,400">
+        <widget name="key" position="20,20" size="460,40" font="Regular;22"/>
+        <widget name="list" position="20,80" size="460,220" font="Regular;20"/>
+        <widget name="hint" position="20,320" size="460,40" font="Regular;18"/>
     </screen>
-</skin>
+
+    <screen name="SettingsScreen" position="center,center" size="500,400">
+        <widget name="menu" position="20,20" size="460,360" font="Regular;22"/>
+    </screen>
+</skins>
