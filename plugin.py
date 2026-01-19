@@ -170,4 +170,149 @@ class SettingsScreen(Screen):
             SETTINGS["hours"] = self.hours
             self.close()
 
-# ---------- AUTO UPDATER -------
+# ---------- AUTO UPDATER ----------
+class AutoUpdater:
+    def __init__(self, session):
+        self.session = session
+        self.timer = eTimer()
+        self.timer.callback.append(self.run)
+        self.start()
+
+    def start(self):
+        self.timer.startLongTimer(SETTINGS["hours"]*3600)
+
+    def run(self):
+        if not SETTINGS["auto"]:
+            self.start()
+            return
+        try: data = urllib.request.urlopen(GITHUB_URL, timeout=10).read().decode()
+        except: self.start(); return
+
+        merged = {}
+        for l in open(BISS_FILE):
+            if l.startswith("F "):
+                p=l.split()
+                merged[f"{p[1]} {p[2]} {p[3]}"] = l.strip()
+        for l in data.splitlines():
+            if l.startswith("F "):
+                p=l.split()
+                merged[f"{p[1]} {p[2]} {p[3]}"] = l.strip()
+        shutil.copy(BISS_FILE,BACKUP_FILE)
+        open(BISS_FILE,"w").write("\n".join(merged.values())+"\n")
+        log("Auto update completed")
+        if os.path.exists("/etc/init.d/softcam"): os.system("/etc/init.d/softcam restart")
+        self.session.open(MessageBox,"BISS Auto Update completed successfully",MessageBox.TYPE_INFO,timeout=5)
+        self.start()
+
+# ---------- MAIN SCREEN ----------
+class BISSPro(Screen):
+    def __init__(self, session):
+        Screen.__init__(self, session)
+        self.session = session
+        ensureFile()
+        self.menu = [
+            "Add / Edit BISS Key",
+            "View Keys",
+            "Delete Key",
+            "Smart Merge from GitHub",
+            "Export Keys to USB",
+            "Import Keys from USB",
+            "Restore Backup",
+            "Restart Softcam",
+            "Settings",
+            "Exit"
+        ]
+        self["menu"] = MenuList(self.menu)
+        self["actions"] = ActionMap(["OkCancelActions"],{"ok": self.ok,"cancel": self.close},-1)
+
+    # ---------- HELPERS ----------
+    def getIDs(self):
+        s = self.session.nav.getCurrentService()
+        if not s: return None
+        i = s.info()
+        return {"sid":"%04X"%i.getInfo(i.sSID),"tsid":"%04X"%i.getInfo(i.sTSID),
+                "onid":"%04X"%i.getInfo(i.sONID),"name":i.getName().strip()}
+
+    def addKey(self):
+        ids = self.getIDs()
+        if not ids: return
+        self.session.open(HexKeyInput,lambda k:self.saveKey(ids,k))
+
+    def saveKey(self,ids,key):
+        mode="00" if len(key)==16 else "01"
+        line=f"F {ids['sid']} {ids['tsid']} {ids['onid']} {mode} {key} ; {ids['name']} | {time.strftime('%Y-%m-%d')}"
+        shutil.copy(BISS_FILE,BACKUP_FILE)
+        lines=[l for l in open(BISS_FILE) if not l.startswith(f"F {ids['sid']} {ids['tsid']} {ids['onid']}")]
+        lines.append(line+"\n")
+        open(BISS_FILE,"w").writelines(lines)
+        log("Key saved")
+        self.restart()
+
+    def view(self):
+        self.session.open(ScrollText,open(BISS_FILE).read() or "No Keys")
+
+    def deleteKey(self):
+        lines=open(BISS_FILE).read().splitlines()
+        if not lines: return
+        self.session.openWithCallback(lambda x:self.confirmDelete(x),MessageBox,"Delete last key?",MessageBox.TYPE_YESNO)
+
+    def confirmDelete(self,answer):
+        if not answer: return
+        shutil.copy(BISS_FILE,BACKUP_FILE)
+        lines=open(BISS_FILE).read().splitlines()
+        open(BISS_FILE,"w").writelines([l+"\n" for l in lines[:-1]])
+        log("Key deleted")
+        self.restart()
+
+    def mergeGit(self):
+        try:data=urllib.request.urlopen(GITHUB_URL,timeout=10).read().decode()
+        except: self.session.open(MessageBox,"GitHub not reachable",MessageBox.TYPE_ERROR); return
+        merged={}
+        for l in open(BISS_FILE):
+            if l.startswith("F "): p=l.split(); merged[f"{p[1]} {p[2]} {p[3]}"]=l.strip()
+        for l in data.splitlines():
+            if l.startswith("F "): p=l.split(); merged[f"{p[1]} {p[2]} {p[3]}"]=l.strip()
+        shutil.copy(BISS_FILE,BACKUP_FILE)
+        open(BISS_FILE,"w").write("\n".join(merged.values())+"\n")
+        log("GitHub merged")
+        self.restart()
+
+    def exportUSB(self):
+        if os.path.exists("/media/usb"):
+            shutil.copy(BISS_FILE,USB_PATH)
+            self.session.open(MessageBox,"Exported to USB",MessageBox.TYPE_INFO,timeout=3)
+
+    def importUSB(self):
+        if os.path.exists(USB_PATH):
+            shutil.copy(USB_PATH,BISS_FILE)
+            self.restart()
+
+    def restart(self):
+        os.system("killall oscam 2>/dev/null; killall ncam 2>/dev/null")
+        if os.path.exists("/etc/init.d/softcam"): os.system("/etc/init.d/softcam restart")
+        elif SOFTCAM_BINARY: os.system(SOFTCAM_BINARY+" &")
+
+    def ok(self):
+        idx=self["menu"].getSelectionIndex()
+        [
+            self.addKey,
+            self.view,
+            self.deleteKey,
+            self.mergeGit,
+            self.exportUSB,
+            self.importUSB,
+            lambda: shutil.copy(BACKUP_FILE,BISS_FILE) if os.path.exists(BACKUP_FILE) else None,
+            self.restart,
+            lambda: self.session.open(SettingsScreen),
+            self.close
+        ][idx]()
+
+# ---------- INIT ----------
+updater=None
+def main(session,**kwargs):
+    global updater
+    if updater is None: updater=AutoUpdater(session)
+    session.open(BISSPro)
+
+def Plugins(**kwargs):
+    return PluginDescriptor(name="BISS Pro Manager v2.6",where=PluginDescriptor.WHERE_PLUGINMENU,fnc=main)
