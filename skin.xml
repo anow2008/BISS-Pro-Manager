@@ -1,13 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <skin>
-    <screen name="BISSPro" position="center,center" size="900,600">
-        <widget name="menu" position="50,90" size="800,420"
-            font="Regular;24"
-            foregroundColor="#FFFFFF"
-            backgroundColor="#000000"/>
-        <widget name="status" position="50,530" size="800,40"
-            font="Regular;20"
-            foregroundColor="#00FF00"
-            backgroundColor="#000000"/>
+
+    <!-- ================= MAIN MENU ================= -->
+    <screen name="BISSPro" position="center,center" size="900,600" title="Biss Pro v1.1">
+        <widget name="menu" position="50,100" size="800,400" font="Regular;26" foregroundColor="#FFFFFF" backgroundColor="#101010"/>
+        <widget name="status" position="50,520" size="800,50" font="Regular;22" foregroundColor="#00FF00" backgroundColor="#101010"/>
     </screen>
+
+    <!-- ================= HEX KEY INPUT ================= -->
+    <screen name="HexKeyInput" position="center,center" size="900,600" title="Enter BISS Key">
+        <widget name="key" position="10,40" size="880,50" font="Regular;28" foregroundColor="#00FF00" backgroundColor="#101010"/>
+        <widget name="list" position="10,110" size="880,300" font="Regular;24" foregroundColor="#FFFFFF" backgroundColor="#202020"/>
+        <widget name="hint" position="10,430" size="880,50" font="Regular;20" foregroundColor="#FFFF00" backgroundColor="#101010"/>
+    </screen>
+
+    <!-- ================= SCROLL TEXT ================= -->
+    <screen name="ScrollText" position="center,center" size="900,600" title="BISS Keys">
+        <widget name="text" position="10,10" size="880,520" font="Regular;24" foregroundColor="#FFFFFF" backgroundColor="#101010"/>
+        <widget name="hint" position="10,540" size="880,50" font="Regular;20" foregroundColor="#FFFF00" backgroundColor="#101010"/>
+    </screen>
+
+    <!-- ================= SHOW CONSTANT.CW ================= -->
+    <screen name="ShowCWScreen" position="center,center" size="900,600" title="constant.cw">
+        <widget name="text" position="10,10" size="880,520" font="Regular;22" foregroundColor="#FFFFFF" backgroundColor="#101010"/>
+        <widget name="hint" position="10,540" size="880,50" font="Regular;20" foregroundColor="#00FFFF" backgroundColor="#101010"/>
+    </screen>
+
+    <!-- ================= SETTINGS SCREEN ================= -->
+    <screen name="SettingsScreen" position="center,center" size="900,600" title="Settings">
+        <widget name="menu" position="50,100" size="800,400" font="Regular;26" foregroundColor="#FFFFFF" backgroundColor="#101010"/>
+    </screen>
+
+    <!-- ================= MESSAGE BOX ================= -->
+    <screen name="MessageBox" position="center,center" size="600,200" title="">
+        <widget name="text" position="10,10" size="580,180" font="Regular;24" foregroundColor="#00FF00" backgroundColor="#101010"/>
+    </screen>
+
 </skin>
