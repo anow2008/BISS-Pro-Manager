@@ -24,13 +24,14 @@ CW_FILE = "/etc/tuxbox/config/constant.cw"
 GITHUB_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
 
 SOFTCAM_BINARY = next(
-    (p for p in ["/usr/bin/oscam", "/usr/bin/ncam"] if os.path.exists(p)),
+    (p for p in ["/usr/bin/oscam", "/usr/bin/oscam-emu", "/usr/bin/ncam"] if os.path.exists(p)),
     None
 )
 
 def ensureFile():
     if not os.path.exists(BISS_FILE):
-        open(BISS_FILE, "w").close()
+        with open(BISS_FILE, "w") as f:
+            pass
 
 # ---------------- SCROLL SCREEN ----------------
 class ScrollText(Screen):
@@ -51,17 +52,46 @@ class ScrollText(Screen):
                 "cancel": self.close,
                 "up": self["text"].pageUp,
                 "down": self["text"].pageDown
-            },
-            -1
+            }, -1
         )
+
+# ---------------- EDIT LIST SCREEN ----------------
+class EditListScreen(Screen):
+    skin = """
+    <screen position="center,center" size="900,600" title="Select Key to Edit">
+        <widget name="list" position="10,10" size="880,520" font="Regular;20"/>
+        <widget name="hint" position="10,540" size="880,40" font="Regular;18"/>
+    </screen>
+    """
+    def __init__(self, session, lines, callback):
+        Screen.__init__(self, session)
+        self.lines = lines
+        self.callback = callback
+        self.items = [f"{idx+1:03d}: {line.strip() or '(empty)'}" for idx, line in enumerate(lines)]
+        self["list"] = MenuList(self.items)
+        self["hint"] = Label("OK=Edit  EXIT=Cancel")
+        self["actions"] = ActionMap(
+            ["OkCancelActions","DirectionActions"],
+            {
+                "ok": self.ok,
+                "cancel": self.close,
+                "up": self["list"].up,
+                "down": self["list"].down
+            }, -1
+        )
+
+    def ok(self):
+        idx = self["list"].getSelectionIndex()
+        self.callback(idx)
+        self.close()
 
 # ---------------- HEX INPUT ----------------
 class HexKeyInput(Screen):
     skin = """
     <screen position="center,center" size="900,600" title="Enter BISS Key">
-        <widget name="key" position="10,50" size="880,40" font="Regular;24"/>
-        <widget name="list" position="10,120" size="880,300" font="Regular;22"/>
-        <widget name="hint" position="10,440" size="880,40" font="Regular;18"/>
+        <widget name="key" position="10,40" size="880,40" font="Regular;24"/>
+        <widget name="list" position="10,100" size="880,300" font="Regular;22"/>
+        <widget name="hint" position="10,420" size="880,40" font="Regular;18"/>
     </screen>
     """
     def __init__(self, session, callback):
@@ -75,13 +105,8 @@ class HexKeyInput(Screen):
         self["hint"] = Label("OK=ADD  RED=DEL  YELLOW=SAVE  EXIT=Cancel")
         self["actions"] = ActionMap(
             ["OkCancelActions","ColorActions","NumberActions"],
-            {
-                "ok": self.ok,
-                "red": self.delete,
-                "yellow": self.save,
-                "cancel": self.close,
-                **{str(i): lambda x=str(i): self.add(x) for i in range(10)}
-            },
+            {**{str(i): lambda x=str(i): self.add(x) for i in range(10)},
+             "ok": self.ok, "red": self.delete, "yellow": self.save, "cancel": self.close},
             -1
         )
         self.update()
@@ -110,267 +135,26 @@ class HexKeyInput(Screen):
 
     def save(self):
         if len(self.key) not in (16, 32):
-            self.session.open(
-                MessageBox,
-                "Key must be 16 or 32 HEX",
-                MessageBox.TYPE_ERROR
-            )
+            self.session.open(MessageBox, "Key must be 16 or 32 HEX", MessageBox.TYPE_ERROR)
             return
         self.callback(self.key)
         self.close()
 
-# ---------------- SHOW CW SCREEN ----------------
-class ShowCWScreen(Screen):
-    skin = """
-    <screen position="center,center" size="900,600" title="constant.cw">
-        <widget name="text" position="10,10" size="880,520" font="Regular;20"/>
-        <widget name="hint" position="10,540" size="880,40" font="Regular;18"/>
-    </screen>
-    """
-    def __init__(self, session, text):
-        Screen.__init__(self, session)
-        self["text"] = ScrollLabel(text)
-        self["hint"] = Label("▲▼ Scroll   OK / EXIT Close")
-        self["actions"] = ActionMap(
-            ["OkCancelActions","DirectionActions"],
-            {
-                "ok": self.close,
-                "cancel": self.close,
-                "up": self["text"].pageUp,
-                "down": self["text"].pageDown
-            },
-            -1
-        )
+# ---------------- HEX INPUT WITH PREFILL ----------------
+class HexKeyInputPrefill(HexKeyInput):
+    def __init__(self, session, prefill, callback):
+        super().__init__(session, callback)
+        self.key = prefill
+        self.update()
 
 # ---------------- MAIN SCREEN ----------------
 class BISSPro(Screen):
+    skin = """
+    <screen position="center,center" size="600,500" title="BISS Pro">
+        <widget name="menu" position="10,10" size="580,420" />
+        <widget name="status" position="10,440" size="580,40" font="Regular;18"/>
+    </screen>
+    """
     def __init__(self, session):
         Screen.__init__(self, session)
         self.session = session
-        self.setTitle(f"{PLUGIN_NAME} {PLUGIN_VERSION}")
-        ensureFile()
-
-        self.menu = [
-            "Add / Edit BISS Key",
-            "View Keys",
-            "Delete Last Key",
-            "Smart Merge from GitHub",
-            "Import constant.cw",
-            "Show constant.cw",
-            "Export Keys to USB",
-            "Import Keys from USB",
-            "Restore Backup",
-            "Restart Softcam",
-            "Exit"
-        ]
-
-        self["menu"] = MenuList(self.menu)
-        self["status"] = Label(f"{PLUGIN_NAME} {PLUGIN_VERSION}")
-        self["actions"] = ActionMap(
-            ["OkCancelActions"],
-            {"ok": self.ok, "cancel": self.close},
-            -1
-        )
-
-    def getIDs(self):
-        s = self.session.nav.getCurrentService()
-        if not s:
-            return None
-        i = s.info()
-        return {
-            "sid": "%04X" % i.getInfo(i.sSID),
-            "tsid": "%04X" % i.getInfo(i.sTSID),
-            "onid": "%04X" % i.getInfo(i.sONID),
-            "name": i.getName().strip()
-        }
-
-    def addKey(self):
-        ids = self.getIDs()
-        if ids:
-            self.session.open(
-                HexKeyInput,
-                lambda k: self.saveKey(ids, k)
-            )
-
-    def saveKey(self, ids, key):
-        mode = "00" if len(key) == 16 else "01"
-        line = (
-            f"F {ids['sid']} {ids['tsid']} {ids['onid']} "
-            f"{mode} {key} ; {ids['name']}"
-        )
-        shutil.copy(BISS_FILE, BACKUP_FILE)
-        open(BISS_FILE, "a").write(line + "\n")
-        self.restart()
-
-    def view(self):
-        self.session.open(
-            ScrollText,
-            open(BISS_FILE).read() or "No Keys"
-        )
-
-    def deleteKey(self):
-        shutil.copy(BISS_FILE, BACKUP_FILE)
-        lines = open(BISS_FILE).read().splitlines()
-        open(BISS_FILE, "w").writelines(
-            [l + "\n" for l in lines[:-1]]
-        )
-        self.restart()
-
-    def mergeGit(self):
-        try:
-            data = urllib.request.urlopen(
-                GITHUB_URL, timeout=10
-            ).read().decode()
-        except:
-            self.session.open(
-                MessageBox,
-                "GitHub not reachable",
-                MessageBox.TYPE_ERROR
-            )
-            return
-
-        merged = {}
-        for l in open(BISS_FILE):
-            if l.startswith("F "):
-                p = l.split()
-                merged[f"{p[1]} {p[2]} {p[3]}"] = l.strip()
-
-        for l in data.splitlines():
-            if l.startswith("F "):
-                p = l.split()
-                merged[f"{p[1]} {p[2]} {p[3]}"] = l.strip()
-
-        shutil.copy(BISS_FILE, BACKUP_FILE)
-        open(BISS_FILE, "w").write(
-            "\n".join(merged.values()) + "\n"
-        )
-        self.restart()
-
-    # -------- IMPORT constant.cw (CW0 / CW1) --------
-    def importConstantCW(self):
-        if not os.path.exists(CW_FILE):
-            self.session.open(
-                MessageBox,
-                "constant.cw not found",
-                MessageBox.TYPE_ERROR
-            )
-            return
-
-        choices = [
-            ("Import CW0", 0),
-            ("Import CW1", 1)
-        ]
-
-        self.session.openWithCallback(
-            self._onCWSelected,
-            ChoiceBox,
-            title="Select CW to import from constant.cw",
-            list=choices
-        )
-
-    def _onCWSelected(self, choice):
-        if not choice:
-            return
-
-        cw_index = choice[1]
-        added = 0
-        existing = open(BISS_FILE).read() if os.path.exists(BISS_FILE) else ""
-
-        shutil.copy(BISS_FILE, BACKUP_FILE)
-
-        for line in open(CW_FILE):
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-
-            parts = line.split(":")
-            if len(parts) < 6:
-                continue
-
-            sid = parts[1].upper().zfill(4)
-            key = parts[-2 if cw_index == 0 else -1].upper()
-
-            if len(key) != 16:
-                continue
-
-            biss = (
-                f"F {sid} 0001 0001 00 {key} "
-                f"; imported from constant.cw (CW{cw_index})"
-            )
-
-            if biss not in existing:
-                open(BISS_FILE, "a").write(biss + "\n")
-                added += 1
-
-        if added:
-            self.session.open(
-                MessageBox,
-                f"Imported {added} keys from CW{cw_index}",
-                MessageBox.TYPE_INFO,
-                timeout=5
-            )
-            self.restart()
-        else:
-            self.session.open(
-                MessageBox,
-                "No new keys found",
-                MessageBox.TYPE_INFO,
-                timeout=5
-            )
-
-    def showConstantCW(self):
-        if not os.path.exists(CW_FILE):
-            self.session.open(
-                MessageBox,
-                "constant.cw not found",
-                MessageBox.TYPE_ERROR
-            )
-            return
-        self.session.open(
-            ShowCWScreen,
-            open(CW_FILE).read()
-        )
-
-    def exportUSB(self):
-        if os.path.exists("/media/usb"):
-            shutil.copy(BISS_FILE, USB_PATH)
-
-    def importUSB(self):
-        if os.path.exists(USB_PATH):
-            shutil.copy(USB_PATH, BISS_FILE)
-            self.restart()
-
-    def restart(self):
-        os.system("killall oscam 2>/dev/null; killall ncam 2>/dev/null")
-        if os.path.exists("/etc/init.d/softcam"):
-            os.system("/etc/init.d/softcam restart")
-        elif SOFTCAM_BINARY:
-            os.system(SOFTCAM_BINARY + " &")
-
-    def ok(self):
-        idx = self["menu"].getSelectionIndex()
-        [
-            self.addKey,
-            self.view,
-            self.deleteKey,
-            self.mergeGit,
-            self.importConstantCW,
-            self.showConstantCW,
-            self.exportUSB,
-            self.importUSB,
-            lambda: shutil.copy(BACKUP_FILE, BISS_FILE)
-            if os.path.exists(BACKUP_FILE) else None,
-            self.restart,
-            self.close
-        ][idx]()
-
-# ---------------- INIT ----------------
-def main(session, **kwargs):
-    session.open(BISSPro)
-
-def Plugins(**kwargs):
-    return PluginDescriptor(
-        name=f"{PLUGIN_NAME} {PLUGIN_VERSION}",
-        where=PluginDescriptor.WHERE_PLUGINMENU,
-        fnc=main
-    )
