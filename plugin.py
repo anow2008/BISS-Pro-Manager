@@ -1,14 +1,15 @@
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
 from Screens.MessageBox import MessageBox
+from Screens.ChoiceBox import ChoiceBox
 from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
 from Components.ScrollLabel import ScrollLabel
-import os, time, urllib.request, shutil
+import os, urllib.request, shutil
 
 PLUGIN_NAME = "Biss Pro"
-PLUGIN_VERSION = "v1.1"
+PLUGIN_VERSION = "v1.0"
 
 SOFTCAM_PATHS = [
     "/etc/tuxbox/config/SoftCam.Key",
@@ -23,7 +24,7 @@ CW_FILE = "/etc/tuxbox/config/constant.cw"
 GITHUB_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
 
 SOFTCAM_BINARY = next(
-    (p for p in ["/usr/bin/oscam","/usr/bin/ncam"] if os.path.exists(p)),
+    (p for p in ["/usr/bin/oscam", "/usr/bin/ncam"] if os.path.exists(p)),
     None
 )
 
@@ -45,7 +46,12 @@ class ScrollText(Screen):
         self["hint"] = Label("▲▼ Scroll   OK / EXIT Close")
         self["actions"] = ActionMap(
             ["OkCancelActions","DirectionActions"],
-            {"ok": self.close,"cancel": self.close,"up": self["text"].pageUp,"down": self["text"].pageDown},
+            {
+                "ok": self.close,
+                "cancel": self.close,
+                "up": self["text"].pageUp,
+                "down": self["text"].pageDown
+            },
             -1
         )
 
@@ -69,20 +75,28 @@ class HexKeyInput(Screen):
         self["hint"] = Label("OK=ADD  RED=DEL  YELLOW=SAVE  EXIT=Cancel")
         self["actions"] = ActionMap(
             ["OkCancelActions","ColorActions","NumberActions"],
-            {"ok": self.ok,"red": self.delete,"yellow": self.save,"cancel": self.close,
-             **{str(i): lambda x=str(i): self.add(x) for i in range(10)}},
+            {
+                "ok": self.ok,
+                "red": self.delete,
+                "yellow": self.save,
+                "cancel": self.close,
+                **{str(i): lambda x=str(i): self.add(x) for i in range(10)}
+            },
             -1
         )
         self.update()
 
     def ok(self):
         s = self["list"].getCurrent()
-        if s=="DEL": self.delete()
-        elif s=="SAVE": self.save()
-        else: self.add(s)
+        if s == "DEL":
+            self.delete()
+        elif s == "SAVE":
+            self.save()
+        else:
+            self.add(s)
 
-    def add(self,c):
-        if len(self.key)<32:
+    def add(self, c):
+        if len(self.key) < 32:
             self.key += c
             self.update()
 
@@ -91,12 +105,16 @@ class HexKeyInput(Screen):
         self.update()
 
     def update(self):
-        v = self.key.ljust(32,"-")
-        self["key"].setText(" ".join(v[i:i+4] for i in range(0,32,4)))
+        v = self.key.ljust(32, "-")
+        self["key"].setText(" ".join(v[i:i+4] for i in range(0, 32, 4)))
 
     def save(self):
-        if len(self.key) not in (16,32):
-            self.session.open(MessageBox,"Key must be 16 or 32 HEX",MessageBox.TYPE_ERROR)
+        if len(self.key) not in (16, 32):
+            self.session.open(
+                MessageBox,
+                "Key must be 16 or 32 HEX",
+                MessageBox.TYPE_ERROR
+            )
             return
         self.callback(self.key)
         self.close()
@@ -115,7 +133,12 @@ class ShowCWScreen(Screen):
         self["hint"] = Label("▲▼ Scroll   OK / EXIT Close")
         self["actions"] = ActionMap(
             ["OkCancelActions","DirectionActions"],
-            {"ok": self.close,"cancel": self.close,"up": self["text"].pageUp,"down": self["text"].pageDown},
+            {
+                "ok": self.close,
+                "cancel": self.close,
+                "up": self["text"].pageUp,
+                "down": self["text"].pageDown
+            },
             -1
         )
 
@@ -143,108 +166,178 @@ class BISSPro(Screen):
 
         self["menu"] = MenuList(self.menu)
         self["status"] = Label(f"{PLUGIN_NAME} {PLUGIN_VERSION}")
-        self["actions"] = ActionMap(["OkCancelActions"],{"ok": self.ok,"cancel": self.close},-1)
+        self["actions"] = ActionMap(
+            ["OkCancelActions"],
+            {"ok": self.ok, "cancel": self.close},
+            -1
+        )
 
     def getIDs(self):
         s = self.session.nav.getCurrentService()
-        if not s: return None
+        if not s:
+            return None
         i = s.info()
-        return {"sid":"%04X"%i.getInfo(i.sSID),
-                "tsid":"%04X"%i.getInfo(i.sTSID),
-                "onid":"%04X"%i.getInfo(i.sONID),
-                "name":i.getName().strip()}
+        return {
+            "sid": "%04X" % i.getInfo(i.sSID),
+            "tsid": "%04X" % i.getInfo(i.sTSID),
+            "onid": "%04X" % i.getInfo(i.sONID),
+            "name": i.getName().strip()
+        }
 
     def addKey(self):
         ids = self.getIDs()
         if ids:
-            self.session.open(HexKeyInput, lambda k: self.saveKey(ids,k))
+            self.session.open(
+                HexKeyInput,
+                lambda k: self.saveKey(ids, k)
+            )
 
     def saveKey(self, ids, key):
-        mode="00" if len(key)==16 else "01"
-        line=f"F {ids['sid']} {ids['tsid']} {ids['onid']} {mode} {key} ; {ids['name']}"
-        shutil.copy(BISS_FILE,BACKUP_FILE)
-        open(BISS_FILE,"a").write(line+"\n")
+        mode = "00" if len(key) == 16 else "01"
+        line = (
+            f"F {ids['sid']} {ids['tsid']} {ids['onid']} "
+            f"{mode} {key} ; {ids['name']}"
+        )
+        shutil.copy(BISS_FILE, BACKUP_FILE)
+        open(BISS_FILE, "a").write(line + "\n")
         self.restart()
 
     def view(self):
-        self.session.open(ScrollText, open(BISS_FILE).read() or "No Keys")
+        self.session.open(
+            ScrollText,
+            open(BISS_FILE).read() or "No Keys"
+        )
 
     def deleteKey(self):
-        shutil.copy(BISS_FILE,BACKUP_FILE)
+        shutil.copy(BISS_FILE, BACKUP_FILE)
         lines = open(BISS_FILE).read().splitlines()
-        open(BISS_FILE,"w").writelines([l+"\n" for l in lines[:-1]])
+        open(BISS_FILE, "w").writelines(
+            [l + "\n" for l in lines[:-1]]
+        )
         self.restart()
 
     def mergeGit(self):
         try:
-            data = urllib.request.urlopen(GITHUB_URL,timeout=10).read().decode()
+            data = urllib.request.urlopen(
+                GITHUB_URL, timeout=10
+            ).read().decode()
         except:
-            self.session.open(MessageBox,"GitHub not reachable",MessageBox.TYPE_ERROR)
+            self.session.open(
+                MessageBox,
+                "GitHub not reachable",
+                MessageBox.TYPE_ERROR
+            )
             return
 
         merged = {}
         for l in open(BISS_FILE):
             if l.startswith("F "):
-                p=l.split()
+                p = l.split()
                 merged[f"{p[1]} {p[2]} {p[3]}"] = l.strip()
+
         for l in data.splitlines():
             if l.startswith("F "):
-                p=l.split()
+                p = l.split()
                 merged[f"{p[1]} {p[2]} {p[3]}"] = l.strip()
-        shutil.copy(BISS_FILE,BACKUP_FILE)
-        open(BISS_FILE,"w").write("\n".join(merged.values())+"\n")
+
+        shutil.copy(BISS_FILE, BACKUP_FILE)
+        open(BISS_FILE, "w").write(
+            "\n".join(merged.values()) + "\n"
+        )
         self.restart()
 
-    # ---------------- IMPORT constant.cw ----------------
+    # -------- IMPORT constant.cw (CW0 / CW1) --------
     def importConstantCW(self):
         if not os.path.exists(CW_FILE):
-            self.session.open(MessageBox,"constant.cw not found",MessageBox.TYPE_ERROR)
+            self.session.open(
+                MessageBox,
+                "constant.cw not found",
+                MessageBox.TYPE_ERROR
+            )
             return
 
-        # Ask user which CW to import
-        cw_choice = ["CW0","CW1"]
-        selected = [0]  # default CW0
-        def cb(index):
-            selected[0] = index
-        self.session.openWithCallback(cb, HexKeyInput, lambda k: None)  # dummy input just for selection
-        cw_index = selected[0]
+        choices = [
+            ("Import CW0", 0),
+            ("Import CW1", 1)
+        ]
 
+        self.session.openWithCallback(
+            self._onCWSelected,
+            ChoiceBox,
+            title="Select CW to import from constant.cw",
+            list=choices
+        )
+
+    def _onCWSelected(self, choice):
+        if not choice:
+            return
+
+        cw_index = choice[1]
         added = 0
         existing = open(BISS_FILE).read() if os.path.exists(BISS_FILE) else ""
 
+        shutil.copy(BISS_FILE, BACKUP_FILE)
+
         for line in open(CW_FILE):
             line = line.strip()
-            if not line or line.startswith("#"): continue
+            if not line or line.startswith("#"):
+                continue
+
             parts = line.split(":")
-            if len(parts)<6: continue
+            if len(parts) < 6:
+                continue
+
             sid = parts[1].upper().zfill(4)
-            key = parts[-2 if cw_index==0 else -1].upper()
-            if len(key)!=16: continue
-            biss = f"F {sid} 0001 0001 00 {key} ; imported from constant.cw"
+            key = parts[-2 if cw_index == 0 else -1].upper()
+
+            if len(key) != 16:
+                continue
+
+            biss = (
+                f"F {sid} 0001 0001 00 {key} "
+                f"; imported from constant.cw (CW{cw_index})"
+            )
+
             if biss not in existing:
-                open(BISS_FILE,"a").write(biss+"\n")
+                open(BISS_FILE, "a").write(biss + "\n")
                 added += 1
 
         if added:
-            self.session.open(MessageBox,f"Imported {added} keys",MessageBox.TYPE_INFO,timeout=5)
+            self.session.open(
+                MessageBox,
+                f"Imported {added} keys from CW{cw_index}",
+                MessageBox.TYPE_INFO,
+                timeout=5
+            )
             self.restart()
         else:
-            self.session.open(MessageBox,"No new keys found",MessageBox.TYPE_INFO,timeout=5)
+            self.session.open(
+                MessageBox,
+                "No new keys found",
+                MessageBox.TYPE_INFO,
+                timeout=5
+            )
 
     def showConstantCW(self):
         if not os.path.exists(CW_FILE):
-            self.session.open(MessageBox,"constant.cw not found",MessageBox.TYPE_ERROR)
+            self.session.open(
+                MessageBox,
+                "constant.cw not found",
+                MessageBox.TYPE_ERROR
+            )
             return
-        text = open(CW_FILE).read()
-        self.session.open(ShowCWScreen, text)
+        self.session.open(
+            ShowCWScreen,
+            open(CW_FILE).read()
+        )
 
     def exportUSB(self):
         if os.path.exists("/media/usb"):
-            shutil.copy(BISS_FILE,USB_PATH)
+            shutil.copy(BISS_FILE, USB_PATH)
 
     def importUSB(self):
         if os.path.exists(USB_PATH):
-            shutil.copy(USB_PATH,BISS_FILE)
+            shutil.copy(USB_PATH, BISS_FILE)
             self.restart()
 
     def restart(self):
@@ -255,7 +348,7 @@ class BISSPro(Screen):
             os.system(SOFTCAM_BINARY + " &")
 
     def ok(self):
-        idx=self["menu"].getSelectionIndex()
+        idx = self["menu"].getSelectionIndex()
         [
             self.addKey,
             self.view,
@@ -265,7 +358,8 @@ class BISSPro(Screen):
             self.showConstantCW,
             self.exportUSB,
             self.importUSB,
-            lambda: shutil.copy(BACKUP_FILE,BISS_FILE) if os.path.exists(BACKUP_FILE) else None,
+            lambda: shutil.copy(BACKUP_FILE, BISS_FILE)
+            if os.path.exists(BACKUP_FILE) else None,
             self.restart,
             self.close
         ][idx]()
