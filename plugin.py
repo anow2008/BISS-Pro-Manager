@@ -20,7 +20,6 @@ SOFTCAM_PATHS = [
 BISS_FILE = next((p for p in SOFTCAM_PATHS if os.path.exists(p)), SOFTCAM_PATHS[0])
 BACKUP_FILE = BISS_FILE + ".bak"
 USB_PATH = "/media/usb/SoftCam.Key"
-CW_FILE = "/etc/tuxbox/config/constant.cw"
 GITHUB_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
 
 SOFTCAM_BINARY = next(
