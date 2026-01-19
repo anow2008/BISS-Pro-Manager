@@ -1,16 +1,6 @@
-<skins>
-    <screen name="ScrollText" position="center,center" size="900,600">
+<skin>
+    <screen name="BissPorScroll" position="center,center" size="900,600" title="BISS Keys">
         <widget name="text" position="10,10" size="880,520" font="Regular;22"/>
         <widget name="hint" position="10,540" size="880,40" font="Regular;18"/>
     </screen>
-
-    <screen name="HexKeyInput" position="center,center" size="500,400">
-        <widget name="key" position="20,20" size="460,40" font="Regular;22"/>
-        <widget name="list" position="20,80" size="460,220" font="Regular;20"/>
-        <widget name="hint" position="20,320" size="460,40" font="Regular;18"/>
-    </screen>
-
-    <screen name="SettingsScreen" position="center,center" size="500,400">
-        <widget name="menu" position="20,20" size="460,360" font="Regular;22"/>
-    </screen>
-</skins>
+</skin>
