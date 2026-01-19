@@ -1,12 +1,11 @@
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
 from Screens.MessageBox import MessageBox
-from Screens.ChoiceBox import ChoiceBox
 from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
 from Components.ScrollLabel import ScrollLabel
-import os, urllib.request, shutil
+import os, shutil
 
 PLUGIN_NAME = "Biss Pro"
 PLUGIN_VERSION = "v1.0"
@@ -34,14 +33,9 @@ def ensureFile():
 
 # ---------------- SCROLL SCREEN ----------------
 class ScrollText(Screen):
-    skin = """
-    <screen position="center,center" size="900,600" title="BISS Keys">
-        <widget name="text" position="10,10" size="880,520" font="Regular;22"/>
-        <widget name="hint" position="10,540" size="880,40" font="Regular;18"/>
-    </screen>
-    """
     def __init__(self, session, text):
         Screen.__init__(self, session)
+        from Components.Sources.ScrollLabel import ScrollLabel
         self["text"] = ScrollLabel(text)
         self["hint"] = Label("▲▼ Scroll   OK / EXIT Close")
         self["actions"] = ActionMap(
@@ -56,12 +50,6 @@ class ScrollText(Screen):
 
 # ---------------- EDIT LIST SCREEN ----------------
 class EditListScreen(Screen):
-    skin = """
-    <screen position="center,center" size="900,600" title="Select Key to Edit">
-        <widget name="list" position="10,10" size="880,520" font="Regular;20"/>
-        <widget name="hint" position="10,540" size="880,40" font="Regular;18"/>
-    </screen>
-    """
     def __init__(self, session, lines, callback):
         Screen.__init__(self, session)
         self.lines = lines
@@ -86,17 +74,10 @@ class EditListScreen(Screen):
 
 # ---------------- HEX INPUT ----------------
 class HexKeyInput(Screen):
-    skin = """
-    <screen position="center,center" size="900,600" title="Enter BISS Key">
-        <widget name="key" position="10,40" size="880,40" font="Regular;24"/>
-        <widget name="list" position="10,100" size="880,300" font="Regular;22"/>
-        <widget name="hint" position="10,420" size="880,40" font="Regular;18"/>
-    </screen>
-    """
-    def __init__(self, session, callback):
+    def __init__(self, session, callback, prefill=""):
         Screen.__init__(self, session)
         self.callback = callback
-        self.key = ""
+        self.key = prefill
         self.keys = ["1","2","3","4","5","6","7","8","9",
                      "A","B","C","D","E","F","0","DEL","SAVE"]
         self["key"] = Label("")
@@ -139,21 +120,26 @@ class HexKeyInput(Screen):
         self.callback(self.key)
         self.close()
 
-# ---------------- HEX INPUT WITH PREFILL ----------------
-class HexKeyInputPrefill(HexKeyInput):
-    def __init__(self, session, prefill, callback):
-        super().__init__(session, callback)
-        self.key = prefill
-        self.update()
-
 # ---------------- MAIN SCREEN ----------------
 class BISSPro(Screen):
-    skin = """
-    <screen position="center,center" size="600,500" title="BISS Pro">
-        <widget name="menu" position="10,10" size="580,420" />
-        <widget name="status" position="10,440" size="580,40" font="Regular;18"/>
-    </screen>
-    """
     def __init__(self, session):
         Screen.__init__(self, session)
         self.session = session
+        self["menu"] = MenuList(["Manage BISS Keys"])
+        self["status"] = Label("BISS Pro Ready")
+        # Action map example
+        self["actions"] = ActionMap(["OkCancelActions","DirectionActions"],
+                                    {"ok": self.menuSelected, "cancel": self.close,
+                                     "up": self["menu"].up, "down": self["menu"].down}, -1)
+
+    def menuSelected(self):
+        # هنا هتفتح شاشة إدارة المفاتيح (مثال)
+        self.session.open(MessageBox, "Feature coming soon", MessageBox.TYPE_INFO)
+
+# ---------------- PLUGIN ENTRY ----------------
+def main(session, **kwargs):
+    session.open(BISSPro)
+
+def Plugins(**kwargs):
+    return [PluginDescriptor(name=PLUGIN_NAME, description="Manage BISS Keys", 
+                             where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
