@@ -2,5 +2,5 @@ Package: enigma2-plugin-extensions-bisspro
 Version: 1.0
 Section: extensions
 Architecture: all
-Maintainer: YourName
+Maintainer: anow2008
 Description: Professional BISS / BISS-E Manager for Enigma2 with USB import, Backup, AES encryption and skin support
