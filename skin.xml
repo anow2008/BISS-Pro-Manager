@@ -1,6 +1,4 @@
-<skin>
-    <screen name="BissPorScroll" position="center,center" size="900,600" title="BISS Keys">
-        <widget name="text" position="10,10" size="880,520" font="Regular;22"/>
-        <widget name="hint" position="10,540" size="880,40" font="Regular;18"/>
-    </screen>
-</skin>
+<screen name="BISSPro" position="center,center" size="900,600" title="BISS Pro">
+    <widget name="menu" position="10,10" size="880,540" font="Regular;22" />
+    <widget name="status" position="10,560" size="880,40" font="Regular;20" />
+</screen>
