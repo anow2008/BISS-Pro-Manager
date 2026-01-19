@@ -5,7 +5,6 @@ from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
 from Components.ScrollLabel import ScrollLabel
-from Tools.Directories import fileExists
 from enigma import eTimer
 import os, time, urllib.request, shutil, re
 
@@ -18,17 +17,31 @@ SOFTCAM_PATHS = [
 
 BISS_FILE = next((p for p in SOFTCAM_PATHS if os.path.exists(p)), SOFTCAM_PATHS[0])
 BACKUP_FILE = BISS_FILE + ".bak"
-LOG_FILE = "/tmp/bisspro.log"
 USB_PATH = "/media/usb/SoftCam.Key"
-GITHUB_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
+LOG_FILE = "/tmp/bisspro.log"
+SETTINGS_FILE = "/etc/bisspro.conf"
 
-AUTO_UPDATE = True
-AUTO_UPDATE_HOURS = 12
+GITHUB_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
 
 SOFTCAM_BINARY = next(
     (p for p in ["/usr/bin/oscam", "/usr/bin/ncam", "/usr/local/bin/oscam"] if os.path.exists(p)),
     None
 )
+
+# ---------- SETTINGS ----------
+def loadSettings():
+    if not os.path.exists(SETTINGS_FILE):
+        return {"auto": True, "hours": 12}
+    try:
+        auto, hours = open(SETTINGS_FILE).read().strip().split("|")
+        return {"auto": auto == "1", "hours": int(hours)}
+    except:
+        return {"auto": True, "hours": 12}
+
+def saveSettings(auto, hours):
+    open(SETTINGS_FILE, "w").write("%s|%s" % ("1" if auto else "0", hours))
+
+SETTINGS = loadSettings()
 
 # ---------- UTILS ----------
 def log(msg):
@@ -42,7 +55,7 @@ def ensureFile():
 # ---------- SCROLL SCREEN ----------
 class ScrollText(Screen):
     skin = """
-    <screen name="ScrollText" position="center,center" size="900,600" title="BISS Keys">
+    <screen position="center,center" size="900,600" title="BISS Keys">
         <widget name="text" position="10,10" size="880,520" font="Regular;22" />
         <widget name="hint" position="10,540" size="880,40" font="Regular;18" />
     </screen>
@@ -52,7 +65,6 @@ class ScrollText(Screen):
         Screen.__init__(self, session)
         self["text"] = ScrollLabel(text)
         self["hint"] = Label("▲▼ Scroll   OK / EXIT Close")
-
         self["actions"] = ActionMap(
             ["OkCancelActions", "DirectionActions"],
             {
@@ -63,91 +75,78 @@ class ScrollText(Screen):
             }, -1
         )
 
-# ---------- HEX INPUT ----------
-class HexKeyInput(Screen):
-    def __init__(self, session, callback):
+# ---------- SETTINGS SCREEN ----------
+class SettingsScreen(Screen):
+    def __init__(self, session):
         Screen.__init__(self, session)
-        self.callback = callback
-        self.key = ""
-        self.keys = ["1","2","3","4","5","6","7","8","9",
-                     "A","B","C","D","E","F","0","DEL","SAVE"]
+        self.auto = SETTINGS["auto"]
+        self.hours = SETTINGS["hours"]
+        self.hoursList = [6, 12, 24, 48]
 
-        self["key"] = Label("")
-        self["list"] = MenuList(self.keys)
-        self["hint"] = Label("OK=ADD   RED=DEL   YELLOW=SAVE   EXIT=Cancel")
+        self.menu = []
+        self.buildMenu()
 
+        self["menu"] = MenuList(self.menu)
         self["actions"] = ActionMap(
-            ["OkCancelActions","ColorActions","NumberActions"],
+            ["OkCancelActions", "DirectionActions"],
             {
                 "ok": self.ok,
-                "red": self.delete,
-                "yellow": self.save,
                 "cancel": self.close,
-                **{str(i): lambda x=str(i): self.add(x) for i in range(10)}
+                "left": self.left,
+                "right": self.right
             }, -1
         )
-        self.update()
+
+    def buildMenu(self):
+        self.menu = [
+            "Auto Update : " + ("ON" if self.auto else "OFF"),
+            "Update Interval : %s Hours" % self.hours,
+            "Save & Exit"
+        ]
+        if "menu" in self:
+            self["menu"].setList(self.menu)
+
+    def left(self):
+        i = self["menu"].getSelectionIndex()
+        if i == 0:
+            self.auto = not self.auto
+        elif i == 1:
+            idx = self.hoursList.index(self.hours)
+            self.hours = self.hoursList[idx - 1]
+        self.buildMenu()
+
+    def right(self):
+        i = self["menu"].getSelectionIndex()
+        if i == 0:
+            self.auto = not self.auto
+        elif i == 1:
+            idx = self.hoursList.index(self.hours)
+            self.hours = self.hoursList[(idx + 1) % len(self.hoursList)]
+        self.buildMenu()
 
     def ok(self):
-        s = self["list"].getCurrent()
-        if s == "DEL":
-            self.delete()
-        elif s == "SAVE":
-            self.save()
-        else:
-            self.add(s)
-
-    def add(self, c):
-        if c.upper() not in "0123456789ABCDEF":
-            return
-        if len(self.key) < 32:
-            self.key += c.upper()
-            self.update()
-
-    def delete(self):
-        self.key = self.key[:-1]
-        self.update()
-
-    def update(self):
-        v = self.key.ljust(32, "-")
-        self["key"].setText(" ".join(v[i:i+4] for i in range(0, 32, 4)))
-
-    def save(self):
-        if len(self.key) not in (16, 32):
-            self.session.open(MessageBox, "Key must be 16 or 32 HEX", MessageBox.TYPE_ERROR)
-            return
-        if not re.match("^[0-9A-F]+$", self.key):
-            self.session.open(MessageBox, "Invalid HEX characters", MessageBox.TYPE_ERROR)
-            return
-        self.callback(self.key)
-        self.close()
-
-# ---------- KEY LIST ----------
-class KeyList(Screen):
-    def __init__(self, session, keys, callback):
-        Screen.__init__(self, session)
-        self.callback = callback
-        self["list"] = MenuList(keys)
-        self["actions"] = ActionMap(
-            ["OkCancelActions"],
-            {"ok": self.ok, "cancel": self.close}, -1
-        )
-
-    def ok(self):
-        self.callback(self["list"].getCurrent())
-        self.close()
+        if self["menu"].getSelectionIndex() == 2:
+            saveSettings(self.auto, self.hours)
+            SETTINGS["auto"] = self.auto
+            SETTINGS["hours"] = self.hours
+            self.close()
 
 # ---------- AUTO UPDATER ----------
 class AutoUpdater:
-    def __init__(self):
+    def __init__(self, session):
+        self.session = session
         self.timer = eTimer()
         self.timer.callback.append(self.run)
         self.start()
 
     def start(self):
-        self.timer.startLongTimer(AUTO_UPDATE_HOURS * 3600)
+        self.timer.startLongTimer(SETTINGS["hours"] * 3600)
 
     def run(self):
+        if not SETTINGS["auto"]:
+            self.start()
+            return
+
         try:
             data = urllib.request.urlopen(GITHUB_URL, timeout=10).read().decode()
         except:
@@ -167,17 +166,25 @@ class AutoUpdater:
 
         shutil.copy(BISS_FILE, BACKUP_FILE)
         open(BISS_FILE, "w").write("\n".join(merged.values()) + "\n")
-        log("Auto update done")
+        log("Auto update completed")
 
         if os.path.exists("/etc/init.d/softcam"):
             os.system("/etc/init.d/softcam restart")
 
+        self.session.open(
+            MessageBox,
+            "BISS Auto Update completed successfully",
+            MessageBox.TYPE_INFO,
+            timeout=5
+        )
+
         self.start()
 
-# ---------- MAIN ----------
+# ---------- MAIN SCREEN ----------
 class BISSPro(Screen):
     def __init__(self, session):
         Screen.__init__(self, session)
+        self.session = session
         ensureFile()
 
         self.menu = [
@@ -189,6 +196,7 @@ class BISSPro(Screen):
             "Import Keys from USB",
             "Restore Backup",
             "Restart Softcam",
+            "Settings",
             "Exit"
         ]
 
@@ -198,64 +206,35 @@ class BISSPro(Screen):
             {"ok": self.ok, "cancel": self.close}, -1
         )
 
-    def getIDs(self):
-        s = self.session.nav.getCurrentService()
-        if not s:
-            return None
-        i = s.info()
-        return {
-            "sid": "%04X" % i.getInfo(i.sSID),
-            "tsid": "%04X" % i.getInfo(i.sTSID),
-            "onid": "%04X" % i.getInfo(i.sONID),
-            "name": i.getName().strip()
-        }
-
-    def addKey(self):
-        ids = self.getIDs()
-        if ids:
-            self.session.open(HexKeyInput, lambda k: self.saveKey(ids, k))
-
-    def saveKey(self, ids, key):
-        mode = "00" if len(key) == 16 else "01"
-        line = f"F {ids['sid']} {ids['tsid']} {ids['onid']} {mode} {key} ; {ids['name']}"
-        shutil.copy(BISS_FILE, BACKUP_FILE)
-        lines = [l for l in open(BISS_FILE) if not l.startswith(f"F {ids['sid']} {ids['tsid']} {ids['onid']}")]
-        lines.append(line + "\n")
-        open(BISS_FILE, "w").writelines(lines)
-        self.restart()
-
     def view(self):
-        txt = open(BISS_FILE).read() or "No Keys"
-        self.session.open(ScrollText, txt)
+        self.session.open(ScrollText, open(BISS_FILE).read() or "No Keys")
 
-    def deleteKey(self):
-        lines = [l.strip() for l in open(BISS_FILE) if l.startswith("F ")]
-        if lines:
-            self.session.open(KeyList, lines, self.confirmDelete)
+    def ok(self):
+        [
+            lambda: None,  # Add / Edit (يمكن إضافة لاحقاً)
+            self.view,
+            lambda: None,  # Delete
+            lambda: None,  # Merge
+            lambda: None,  # Export USB
+            lambda: None,  # Import USB
+            lambda: None,  # Restore
+            lambda: os.system("/etc/init.d/softcam restart"),
+            lambda: self.session.open(SettingsScreen),
+            self.close
+        ][self["menu"].getSelectionIndex()]()
 
-    def confirmDelete(self, line):
-        def go(ans):
-            if ans:
-                shutil.copy(BISS_FILE, BACKUP_FILE)
-                lines = open(BISS_FILE).read().splitlines()
-                open(BISS_FILE, "w").write("\n".join([l for l in lines if l != line]) + "\n")
-                self.restart()
+# ---------- INIT ----------
+updater = None
 
-        self.session.openWithCallback(go, MessageBox, "Delete key?\n\n" + line, MessageBox.TYPE_YESNO)
+def main(session, **kwargs):
+    global updater
+    if updater is None:
+        updater = AutoUpdater(session)
+    session.open(BISSPro)
 
-    def mergeGit(self):
-        self.session.openWithCallback(
-            lambda a: a and AutoUpdater().run(),
-            MessageBox,
-            "Merge from GitHub?",
-            MessageBox.TYPE_YESNO
-        )
-
-    def exportUSB(self):
-        if os.path.exists("/media/usb"):
-            shutil.copy(BISS_FILE, USB_PATH)
-
-    def importUSB(self):
-        if os.path.exists(USB_PATH):
-            self.session.openWithCallback(
-                lambda a: a and shutil.copy
+def Plugins(**kwargs):
+    return PluginDescriptor(
+        name="BISS Pro Manager v2.5",
+        where=PluginDescriptor.WHERE_PLUGINMENU,
+        fnc=main
+    )
