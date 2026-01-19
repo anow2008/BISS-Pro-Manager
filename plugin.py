@@ -13,6 +13,7 @@ SOFTCAM_PATHS = [
     "/var/keys/SoftCam.Key",
     "/usr/local/etc/SoftCam.Key"
 ]
+
 BISS_FILE = next((p for p in SOFTCAM_PATHS if os.path.exists(p)), SOFTCAM_PATHS[0])
 BACKUP_FILE = BISS_FILE + ".bak"
 LOG_FILE = "/tmp/bisspro.log"
@@ -24,21 +25,26 @@ SOFTCAM_BINARY = next(
     None
 )
 
+# ---------- UTILS ----------
 def log(msg):
     with open(LOG_FILE, "a") as f:
         f.write("[%s] %s\n" % (time.strftime("%H:%M:%S"), msg))
 
+def ensureFile():
+    if not os.path.exists(BISS_FILE):
+        open(BISS_FILE, "w").close()
+
 # ---------- HEX INPUT ----------
 class HexKeyInput(Screen):
-    def __init__(self, session, callback, existing=""):
+    def __init__(self, session, callback):
         Screen.__init__(self, session)
         self.callback = callback
-        self.key = existing.upper()
-        self.keys = ["1","2","3","4","5","6","7","8","9","A","B","C","D","E","F","0","DEL","ADD"]
+        self.key = ""
+        self.keys = ["1","2","3","4","5","6","7","8","9","A","B","C","D","E","F","0","DEL","SAVE"]
 
         self["key"] = Label("")
-        self["list"] = MenuList(self.keys, enableWrapAround=True)
-        self["hint"] = Label("RED=DEL  YELLOW=SAVE  EXIT=Cancel")
+        self["list"] = MenuList(self.keys)
+        self["hint"] = Label("OK=ADD   RED=DEL   YELLOW=SAVE   EXIT=Cancel")
 
         self["actions"] = ActionMap(
             ["OkCancelActions","ColorActions","NumberActions"],
@@ -54,9 +60,12 @@ class HexKeyInput(Screen):
 
     def ok(self):
         s = self["list"].getCurrent()
-        if s == "DEL": self.delete()
-        elif s == "ADD": self.save()
-        else: self.add(s)
+        if s == "DEL":
+            self.delete()
+        elif s == "SAVE":
+            self.save()
+        else:
+            self.add(s)
 
     def add(self, c):
         if len(self.key) < 32:
@@ -83,6 +92,7 @@ class BISSPro(Screen):
     def __init__(self, session):
         Screen.__init__(self, session)
         self.session = session
+        ensureFile()
 
         self.menu = [
             "Add / Edit BISS Key",
@@ -95,6 +105,7 @@ class BISSPro(Screen):
             "Restart Softcam",
             "Exit"
         ]
+
         self["menu"] = MenuList(self.menu)
         self["status"] = Label("Ready")
 
@@ -106,7 +117,8 @@ class BISSPro(Screen):
     # ---------- SERVICE ----------
     def getIDs(self):
         s = self.session.nav.getCurrentService()
-        if not s: return None
+        if not s:
+            return None
         i = s.info()
         return {
             "sid": "%04X" % i.getInfo(i.sSID),
@@ -118,61 +130,77 @@ class BISSPro(Screen):
     # ---------- ADD ----------
     def addKey(self):
         ids = self.getIDs()
-        if not ids: return
-        self.session.open(
-            HexKeyInput,
-            lambda k: self.saveKey(ids, k)
-        )
+        if not ids:
+            return
+        self.session.open(HexKeyInput, lambda k: self.saveKey(ids, k))
 
     def saveKey(self, ids, key):
-        mode = "00" if len(key)==16 else "01"
+        mode = "00" if len(key) == 16 else "01"
         line = f"F {ids['sid']} {ids['tsid']} {ids['onid']} {mode} {key} ; {ids['name']} | {time.strftime('%Y-%m-%d')}"
+
         shutil.copy(BISS_FILE, BACKUP_FILE)
 
         lines = [l for l in open(BISS_FILE) if not l.startswith(f"F {ids['sid']} {ids['tsid']} {ids['onid']}")]
-        lines.append(line+"\n")
-        open(BISS_FILE,"w").writelines(lines)
+        lines.append(line + "\n")
+
+        open(BISS_FILE, "w").writelines(lines)
         log("Key saved")
         self.restart()
 
     # ---------- VIEW ----------
     def view(self):
-        self.session.open(MessageBox, open(BISS_FILE).read(), MessageBox.TYPE_INFO)
+        self.session.open(MessageBox, open(BISS_FILE).read() or "No Keys", MessageBox.TYPE_INFO)
 
     # ---------- DELETE ----------
-    def delete(self):
+    def deleteKey(self):
         lines = open(BISS_FILE).read().splitlines()
-        self.session.openWithCallback(self.doDelete, MenuList, lines)
+        if not lines:
+            return
+        self.session.openWithCallback(
+            lambda x: self.confirmDelete(x),
+            MessageBox,
+            "Delete selected key?",
+            MessageBox.TYPE_YESNO
+        )
 
-    def doDelete(self, l):
-        if not l: return
+    def confirmDelete(self, answer):
+        if not answer:
+            return
         shutil.copy(BISS_FILE, BACKUP_FILE)
-        open(BISS_FILE,"w").writelines([x+"\n" for x in open(BISS_FILE).read().splitlines() if x!=l])
+        lines = open(BISS_FILE).read().splitlines()
+        open(BISS_FILE, "w").writelines([l + "\n" for l in lines[:-1]])
         log("Key deleted")
         self.restart()
 
     # ---------- MERGE ----------
     def mergeGit(self):
-        data = urllib.request.urlopen(GITHUB_URL).read().decode()
-        merged = {}
+        try:
+            data = urllib.request.urlopen(GITHUB_URL, timeout=10).read().decode()
+        except:
+            self.session.open(MessageBox, "GitHub not reachable", MessageBox.TYPE_ERROR)
+            return
 
+        merged = {}
         for l in open(BISS_FILE):
             if l.startswith("F "):
-                p=l.split(); merged[f"{p[1]} {p[2]} {p[3]}"]=l.strip()
+                p = l.split()
+                merged[f"{p[1]} {p[2]} {p[3]}"] = l.strip()
 
         for l in data.splitlines():
             if l.startswith("F "):
-                p=l.split(); merged[f"{p[1]} {p[2]} {p[3]}"]=l.strip()
+                p = l.split()
+                merged[f"{p[1]} {p[2]} {p[3]}"] = l.strip()
 
         shutil.copy(BISS_FILE, BACKUP_FILE)
-        open(BISS_FILE,"w").write("\n".join(merged.values())+"\n")
+        open(BISS_FILE, "w").write("\n".join(merged.values()) + "\n")
         log("GitHub merged")
         self.restart()
 
     # ---------- USB ----------
     def exportUSB(self):
-        shutil.copy(BISS_FILE, USB_PATH)
-        self["status"].setText("Exported to USB")
+        if os.path.exists("/media/usb"):
+            shutil.copy(BISS_FILE, USB_PATH)
+            self["status"].setText("Exported to USB")
 
     def importUSB(self):
         if os.path.exists(USB_PATH):
@@ -183,17 +211,24 @@ class BISSPro(Screen):
     def restart(self):
         os.system("killall oscam 2>/dev/null; killall ncam 2>/dev/null")
         time.sleep(1)
-        if SOFTCAM_BINARY:
-            os.system(SOFTCAM_BINARY+" &")
+        if os.path.exists("/etc/init.d/softcam"):
+            os.system("/etc/init.d/softcam restart")
+        elif SOFTCAM_BINARY:
+            os.system(SOFTCAM_BINARY + " &")
 
     # ---------- OK ----------
     def ok(self):
         i = self["menu"].getSelectionIndex()
         [
-            self.addKey, self.view, self.delete,
-            self.mergeGit, self.exportUSB, self.importUSB,
-            lambda: shutil.copy(BACKUP_FILE,BISS_FILE),
-            self.restart, self.close
+            self.addKey,
+            self.view,
+            self.deleteKey,
+            self.mergeGit,
+            self.exportUSB,
+            self.importUSB,
+            lambda: shutil.copy(BACKUP_FILE, BISS_FILE) if os.path.exists(BACKUP_FILE) else None,
+            self.restart,
+            self.close
         ][i]()
 
 # ---------- INIT ----------
@@ -202,7 +237,7 @@ def main(session, **kwargs):
 
 def Plugins(**kwargs):
     return PluginDescriptor(
-        name="BISS Pro Manager v2",
+        name="BISS Pro Manager v2.1",
         where=PluginDescriptor.WHERE_PLUGINMENU,
         fnc=main
     )
