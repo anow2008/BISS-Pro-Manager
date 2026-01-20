@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-# Biss Pro v1.0 – Fully Auto Smart Enigma2 Plugin
-# تحديث يومي في ساعة محددة + ON/OFF + شريط تقدم + قائمة فرعية للتحديث
+# Biss Pro v1.0 – Fully Safe & Auto Smart Enigma2 Plugin with ProgressBar
 
 from __future__ import print_function
 from Plugins.Plugin import PluginDescriptor
@@ -9,6 +8,8 @@ from Screens.MessageBox import MessageBox
 from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
+from Components.ProgressBar import ProgressBar
+from enigma import eTimer
 import os, shutil, time, urllib.request, ssl, threading
 
 PLUGIN_NAME = "Biss Pro"
@@ -69,7 +70,6 @@ def last_update_time():
             return int(f.read())
     return 0
 
-# ---------------- Update Interval ----------------
 def get_update_interval():
     if os.path.exists(UPDATE_CONFIG):
         try:
@@ -84,9 +84,7 @@ def set_update_interval(hours):
     with open(UPDATE_CONFIG, "w") as f:
         f.write(str(hours))
 
-# ---------------- Schedule Config ----------------
 def read_schedule_config():
-    """إرجاع (hour, on_off)"""
     if os.path.exists(SCHEDULE_CONFIG):
         try:
             with open(SCHEDULE_CONFIG) as f:
@@ -96,11 +94,20 @@ def read_schedule_config():
                 return hour, state
         except:
             return 3, True
-    return 3, True  # افتراضي الساعة 03:00 ON
+    return 3, True
 
 def write_schedule_config(hour, state):
     with open(SCHEDULE_CONFIG, "w") as f:
         f.write(f"{hour},{ 'ON' if state else 'OFF'}")
+
+# ---------------- Safe GUI Updates ----------------
+def safe_set_text(session, text):
+    if session and hasattr(session, "instance") and session.instance is not None:
+        session.instance.runOnMainThread(lambda: session["status"].setText(text))
+
+def safe_set_progress(session, value):
+    if session and hasattr(session, "instance") and session.instance is not None:
+        session.instance.runOnMainThread(lambda: session["progress"].setValue(value))
 
 # ---------------- Update Keys ----------------
 def update_keys_thread(session=None):
@@ -110,10 +117,12 @@ def update_keys_thread(session=None):
         temp_file = BISS_FILE + ".tmp"
 
         def reporthook(blocknum, blocksize, totalsize):
-            if totalsize > 0 and session:
-                percent = int(blocknum*blocksize*100/totalsize)
-                session["status"].setText(f"جاري التحميل: {percent}%")
+            if totalsize > 0:
+                percent = int(blocknum * blocksize * 100 / totalsize)
+                safe_set_text(session, f"جاري التحميل: {percent}%")
+                safe_set_progress(session, percent)
 
+        safe_set_progress(session, 0)
         urllib.request.urlretrieve(UPDATE_URL, temp_file, reporthook)
         with open(temp_file) as f:
             lines = clean(f.readlines())
@@ -123,11 +132,11 @@ def update_keys_thread(session=None):
 
         record_update_time()
         restartSoftcam()
-        if session:
-            session["status"].setText("✅ تم تحديث المفاتيح بنجاح")
+        safe_set_text(session, "✅ تم تحديث المفاتيح بنجاح")
+        safe_set_progress(session, 100)
     except Exception as e:
-        if session:
-            session["status"].setText(f"❌ خطأ أثناء التحديث: {e}")
+        safe_set_text(session, f"❌ خطأ أثناء التحديث: {e}")
+        safe_set_progress(session, 0)
 
 def update_from_internet(session=None):
     threading.Thread(target=update_keys_thread, args=(session,)).start()
@@ -135,9 +144,10 @@ def update_from_internet(session=None):
 # ---------------- MAIN SCREEN ----------------
 class BISSPro(Screen):
     skin = """
-        <screen name="BISSPro" position="center,center" size="600,500" title="Biss Pro v1.5">
+        <screen name="BISSPro" position="center,center" size="600,520" title="Biss Pro v1.3">
             <widget name="menu" position="10,10" size="580,350" scrollbarMode="showOnDemand"/>
-            <widget name="status" position="10,370" size="580,120" font="Regular;20" halign="center"/>
+            <widget name="progress" position="10,370" size="580,30" backgroundColor="#444444" />
+            <widget name="status" position="10,410" size="580,100" font="Regular;20" halign="center"/>
         </screen>
     """
 
@@ -160,6 +170,7 @@ class BISSPro(Screen):
 
         self["menu"] = MenuList(self.main_menu_items)
         self["status"] = Label("")
+        self["progress"] = ProgressBar()
 
         self["actions"] = ActionMap(
             ["OkCancelActions", "DirectionActions"],
@@ -171,24 +182,18 @@ class BISSPro(Screen):
             }, -1
         )
 
-        # تفعيل الجدولة اليومية
-        self.schedule_daily_update()
+        # Daily Scheduler using eTimer
+        self.schedule_timer = eTimer()
+        self.schedule_timer.callback.append(self.check_daily_update)
+        self.schedule_timer.start(60000, True)  # check every minute
 
-    # ---------------- Schedule Thread ----------------
-    def schedule_daily_update(self):
-        """تحديث يومي محدد الساعة إذا ON"""
-        def daily_scheduler():
-            while True:
-                hour, state = read_schedule_config()
-                if state:
-                    now = time.localtime()
-                    if now.tm_hour == hour and now.tm_min == 0:
-                        update_from_internet(session=self)
-                        time.sleep(60)
-                time.sleep(30)
-        threading.Thread(target=daily_scheduler, daemon=True).start()
+    def check_daily_update(self):
+        hour, state = read_schedule_config()
+        now = time.localtime()
+        if state and now.tm_hour == hour and now.tm_min == 0:
+            safe_set_text(self, "⏳ جاري التحديث اليومي...")
+            update_from_internet(session=self)
 
-    # ---------------- OK Action ----------------
     def ok(self):
         i = self["menu"].getSelectionIndex()
         current_list = self["menu"].getList()
@@ -200,11 +205,11 @@ class BISSPro(Screen):
             self.addBISSFromChannel()
         elif item == "Restart Softcam":
             restartSoftcam()
-            self["status"].setText("SoftCam تم إعادة تشغيله")
+            safe_set_text(self, "SoftCam تم إعادة تشغيله")
         elif item == "Update & Schedule Options":
             self.open_update_menu()
         elif item == "Update Keys from Internet":
-            self["status"].setText("جاري التحديث من الإنترنت...")
+            safe_set_text(self, "⏳ جاري التحديث من الإنترنت...")
             update_from_internet(session=self)
         elif item == "Set Update Interval (hours)":
             self.session.openWithCallback(self.set_interval_callback,
@@ -219,18 +224,16 @@ class BISSPro(Screen):
         elif item == "Back":
             self["menu"].setList(self.main_menu_items)
 
-    # ---------------- Open Submenu ----------------
     def open_update_menu(self):
         self["menu"].setList(self.update_menu_items)
 
-    # ---------------- Callbacks ----------------
     def set_interval_callback(self, value):
         try:
             hours = int(value)
             set_update_interval(hours)
-            self["status"].setText(f"تم ضبط فترة التحديث: {hours} ساعة")
+            safe_set_text(self, f"تم ضبط فترة التحديث: {hours} ساعة")
         except:
-            self["status"].setText("قيمة غير صحيحة")
+            safe_set_text(self, "قيمة غير صحيحة")
 
     def schedule_callback(self, value):
         try:
@@ -238,15 +241,14 @@ class BISSPro(Screen):
             hour = int(parts[0])
             state = parts[1].upper() == "ON"
             write_schedule_config(hour, state)
-            self["status"].setText(f"جدولة يومية: الساعة {hour}:00 {'ON' if state else 'OFF'}")
+            safe_set_text(self, f"جدولة يومية: الساعة {hour}:00 {'ON' if state else 'OFF'}")
         except:
-            self["status"].setText("خطأ في إدخال البيانات")
+            safe_set_text(self, "خطأ في إدخال البيانات")
 
-    # ---------------- Main Functions ----------------
     def view(self):
         with open(BISS_FILE) as f:
             biss = [l for l in f if l.startswith("BISS")]
-        self["status"].setText(f"Total Keys: {len(biss)}")
+        safe_set_text(self, f"Total Keys: {len(biss)}")
 
     def addBISSFromChannel(self):
         try:
@@ -270,7 +272,7 @@ class BISSPro(Screen):
             f.write("\n" + line)
         self.cleanup()
         restartSoftcam()
-        self["status"].setText("BISS Key أضيف وتم إعادة تشغيل SoftCam")
+        safe_set_text(self, "BISS Key أضيف وتم إعادة تشغيل SoftCam")
 
     def cleanup(self):
         with open(BISS_FILE) as f:
@@ -285,7 +287,7 @@ def main(session, **kwargs):
 def Plugins(**kwargs):
     return [PluginDescriptor(
         name=PLUGIN_NAME,
-        description="BISS Pro Smart Auto Add + Daily Scheduled Update (v1.0)",
+        description="BISS Pro Smart Auto Add + Safe Daily Update + ProgressBar (v1.0)",
         where=PluginDescriptor.WHERE_PLUGINMENU,
         fnc=main
     )]
