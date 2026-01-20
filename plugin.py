@@ -28,7 +28,6 @@ SOFTCAM_PATHS = [
 
 BISS_FILE = next((p for p in SOFTCAM_PATHS if os.path.exists(p)), SOFTCAM_PATHS[0])
 BACKUP_DIR = "/etc/tuxbox/config/bisspro_backups/"
-USB_PATH = "/media/usb/SoftCam.Key"
 
 GITHUB_MIRRORS = [
     "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key",
@@ -95,8 +94,6 @@ class BISSPro(Screen):
         self["menu"] = MenuList([
             "View Keys Count",
             "Add BISS from Channel",
-            "Add Manual BISS",
-            "Import from USB",
             "Update Online",
             "Auto Update Interval",
             "Fixed Time Update",
@@ -117,12 +114,10 @@ class BISSPro(Screen):
         i = self["menu"].getSelectionIndex()
         if i == 0: self.view()
         elif i == 1: self.fromService()
-        elif i == 2: self.manual()
-        elif i == 3: self.importUSB()
-        elif i == 4: self.update(True)
-        elif i == 5: self.interval()
-        elif i == 6: self.fixed()
-        elif i == 7: restartSoftcam()
+        elif i == 2: self.update(True)
+        elif i == 3: self.interval()
+        elif i == 4: self.fixed()
+        elif i == 5: restartSoftcam()
 
     def view(self):
         with open(BISS_FILE) as f:
@@ -130,25 +125,6 @@ class BISSPro(Screen):
         self.session.open(MessageBox,
             "Total Keys: %d" % len(biss),
             MessageBox.TYPE_INFO)
-
-    def manual(self):
-        from Screens.InputBox import InputBox
-        def cb(k):
-            if not re.match("^[0-9A-F]{16,32}$", k):
-                self.session.open(MessageBox, "Invalid HEX Key", MessageBox.TYPE_ERROR)
-                return
-            backup()
-            with open(BISS_FILE, "a") as f:
-                f.write("\nBISS 0000:0000:0000:%s" % k)
-            restartSoftcam()
-            self.session.open(MessageBox, "Key Added", MessageBox.TYPE_INFO)
-
-        self.session.open(InputBox,
-            title="Enter HEX Key",
-            text="",
-            maxSize=32,
-            type=InputBox.TYPE_TEXT,
-            callback=cb)
 
     def fromService(self):
         try:
@@ -177,16 +153,6 @@ class BISSPro(Screen):
             maxSize=32,
             type=InputBox.TYPE_TEXT,
             callback=cb)
-
-    def importUSB(self):
-        if not os.path.exists(USB_PATH):
-            self.session.open(MessageBox, "USB file not found", MessageBox.TYPE_ERROR)
-            return
-        backup()
-        shutil.copy(USB_PATH, BISS_FILE)
-        self.cleanup()
-        restartSoftcam()
-        self.session.open(MessageBox, "Imported from USB", MessageBox.TYPE_INFO)
 
     def update(self, manual=False):
         if not update_lock.acquire(False):
@@ -270,4 +236,3 @@ def Plugins(**kwargs):
         where=PluginDescriptor.WHERE_PLUGINMENU,
         fnc=main
     )]
-
