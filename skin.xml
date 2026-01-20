@@ -1,26 +1,51 @@
 <skin>
-    <!-- Main BISSPro Screen -->
-    <screen name="BISSPro" position="center,center" size="600,500" title="BISS Pro">
-        <widget name="menu" position="10,10" size="580,420" font="Regular;22" />
-        <widget name="status" position="10,440" size="580,40" font="Regular;18" />
+    <screen name="BISSPro" position="center,center" size="900,500" title="BISS Pro Manager">
+        <widget name="menu"
+            position="50,70"
+            size="800,360"
+            scrollbarMode="showOnDemand"
+            font="Regular;28"
+            itemHeight="45"
+        />
+
+        <widget source="title" render="Label"
+            position="50,20"
+            size="800,40"
+            font="Regular;32"
+            halign="center"
+            valign="center"
+        />
+
+        <ePixmap
+            position="0,0"
+            size="900,500"
+            pixmap="skin_default/background.png"
+            zPosition="-1"
+            alphatest="blend"
+        />
     </screen>
 
-    <!-- ScrollText Screen -->
-    <screen name="ScrollText" position="center,center" size="900,600" title="BISS Keys">
-        <widget name="text" position="10,10" size="880,520" font="Regular;22"/>
-        <widget name="hint" position="10,540" size="880,40" font="Regular;18"/>
+    <!-- MessageBox -->
+    <screen name="MessageBox" position="center,center" size="700,260" title="Message">
+        <widget name="text"
+            position="30,30"
+            size="640,150"
+            font="Regular;26"
+        />
+        <widget name="ErrorPixmap"
+            position="20,20"
+            size="10,10"
+            alphatest="blend"
+        />
     </screen>
 
-    <!-- EditListScreen -->
-    <screen name="EditListScreen" position="center,center" size="900,600" title="Select Key to Edit">
-        <widget name="list" position="10,10" size="880,520" font="Regular;20"/>
-        <widget name="hint" position="10,540" size="880,40" font="Regular;18"/>
-    </screen>
-
-    <!-- HexKeyInput Screen -->
-    <screen name="HexKeyInput" position="center,center" size="900,600" title="Enter BISS Key">
-        <widget name="key" position="10,40" size="880,40" font="Regular;24"/>
-        <widget name="list" position="10,100" size="880,300" font="Regular;22"/>
-        <widget name="hint" position="10,420" size="880,40" font="Regular;18"/>
+    <!-- ChoiceBox -->
+    <screen name="ChoiceBox" position="center,center" size="700,400" title="Select">
+        <widget name="list"
+            position="30,60"
+            size="640,300"
+            font="Regular;26"
+            itemHeight="40"
+        />
     </screen>
 </skin>
