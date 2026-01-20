@@ -4,11 +4,9 @@
 from __future__ import print_function
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
-from Screens.MessageBox import MessageBox
 from Screens.ChoiceBox import ChoiceBox
 from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
-from Components.Label import Label
 import os, shutil, re, time, threading
 
 try:
@@ -122,9 +120,8 @@ class BISSPro(Screen):
     def view(self):
         with open(BISS_FILE) as f:
             biss = [l for l in f if l.startswith(("BISS", "P:", "T:"))]
-        self.session.open(MessageBox,
-            "Total Keys: %d" % len(biss),
-            MessageBox.TYPE_INFO)
+        # لا MessageBox بعد التعديل تلقائي، ممكن تطبع في Console إذا تحب
+        print("Total Keys:", len(biss))
 
     def fromService(self):
         try:
@@ -135,17 +132,19 @@ class BISSPro(Screen):
             ts = i.getInfo(iServiceInformation.sTSID)
             on = i.getInfo(iServiceInformation.sONID)
         except:
-            self.session.open(MessageBox, "No active service", MessageBox.TYPE_ERROR)
-            return
+            return  # لو مفيش قناة شغالة، ما يعملش حاجة
 
         from Screens.InputBox import InputBox
         def cb(k):
+            # هيتحقق من طول المفتاح (16 أو 32 Hex)
+            if not re.match("^[0-9A-F]{16,32}$", k):
+                return
             line = "BISS %04X:%04X:%04X:%s" % (sid, ts, on, k)
             backup()
             with open(BISS_FILE, "a") as f:
                 f.write("\n" + line)
-            restartSoftcam()
-            self.session.open(MessageBox, "BISS Added", MessageBox.TYPE_INFO)
+            self.cleanup()
+            restartSoftcam()  # إعادة تشغيل Softcam تلقائيًا
 
         self.session.open(InputBox,
             title="Enter HEX Key",
@@ -172,13 +171,9 @@ class BISSPro(Screen):
                     self.cleanup()
                     restartSoftcam()
                     open(LAST_UPDATE, "w").write(str(int(time.time())))
-                    if manual:
-                        self.session.open(MessageBox, "Online Update Done", MessageBox.TYPE_INFO)
                     return
                 except:
                     pass
-            if manual:
-                self.session.open(MessageBox, "Update Failed", MessageBox.TYPE_ERROR)
         finally:
             update_lock.release()
 
@@ -232,7 +227,7 @@ def main(session, **kwargs):
 def Plugins(**kwargs):
     return [PluginDescriptor(
         name=PLUGIN_NAME,
-        description="BISS Pro Manager v1.0",
+        description="BISS Pro Manager v1.0 (Auto Save)",
         where=PluginDescriptor.WHERE_PLUGINMENU,
         fnc=main
     )]
