@@ -1,145 +1,272 @@
+# -*- coding: utf-8 -*-
+# Biss Pro v1.0 – Secure Universal Enigma2 Plugin (Python2 / Python3)
+
+from __future__ import print_function
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
 from Screens.MessageBox import MessageBox
+from Screens.ChoiceBox import ChoiceBox
 from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
-from Components.ScrollLabel import ScrollLabel
-import os, shutil
+import os, shutil, re, time, threading
+
+try:
+    from urllib.request import urlopen
+except ImportError:
+    from urllib2 import urlopen
 
 PLUGIN_NAME = "Biss Pro"
-PLUGIN_VERSION = "v1.0"
+PLUGIN_VERSION = "1.0"
 
 SOFTCAM_PATHS = [
     "/etc/tuxbox/config/SoftCam.Key",
     "/var/keys/SoftCam.Key",
-    "/usr/local/etc/SoftCam.Key"
+    "/usr/keys/SoftCam.Key",
+    "/usr/local/etc/SoftCam.Key",
 ]
 
 BISS_FILE = next((p for p in SOFTCAM_PATHS if os.path.exists(p)), SOFTCAM_PATHS[0])
-BACKUP_FILE = BISS_FILE + ".bak"
+BACKUP_DIR = "/etc/tuxbox/config/bisspro_backups/"
 USB_PATH = "/media/usb/SoftCam.Key"
-GITHUB_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
 
-SOFTCAM_BINARY = next(
-    (p for p in ["/usr/bin/oscam", "/usr/bin/oscam-emu", "/usr/bin/ncam"] if os.path.exists(p)),
-    None
-)
+GITHUB_MIRRORS = [
+    "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key",
+    "https://raw.githubusercontent.com/oscam/SoftCam.Key/master/SoftCam.Key"
+]
 
-def ensureFile():
+MAX_BACKUPS = 3
+LAST_UPDATE = "/tmp/bisspro_last"
+INTERVAL_FILE = "/tmp/bisspro_interval"
+FIXED_TIME_FILE = "/tmp/bisspro_fixed"
+
+update_lock = threading.Lock()
+
+# ---------------- Utils ----------------
+def ensure():
     if not os.path.exists(BISS_FILE):
-        with open(BISS_FILE, "w") as f:
-            pass
+        open(BISS_FILE, "w").close()
+    if not os.path.exists(BACKUP_DIR):
+        os.makedirs(BACKUP_DIR)
 
-# ---------------- SCROLL SCREEN ----------------
-class ScrollText(Screen):
-    def __init__(self, session, text):
-        Screen.__init__(self, session)
-        from Components.Sources.ScrollLabel import ScrollLabel
-        self["text"] = ScrollLabel(text)
-        self["hint"] = Label("▲▼ Scroll   OK / EXIT Close")
-        self["actions"] = ActionMap(
-            ["OkCancelActions","DirectionActions"],
-            {
-                "ok": self.close,
-                "cancel": self.close,
-                "up": self["text"].pageUp,
-                "down": self["text"].pageDown
-            }, -1
-        )
+def backup():
+    ensure()
+    name = time.strftime("SoftCam.Key_%Y%m%d_%H%M%S")
+    shutil.copy(BISS_FILE, os.path.join(BACKUP_DIR, name))
+    files = sorted(os.listdir(BACKUP_DIR))
+    while len(files) > MAX_BACKUPS:
+        os.remove(os.path.join(BACKUP_DIR, files.pop(0)))
 
-# ---------------- EDIT LIST SCREEN ----------------
-class EditListScreen(Screen):
-    def __init__(self, session, lines, callback):
-        Screen.__init__(self, session)
-        self.lines = lines
-        self.callback = callback
-        self.items = [f"{idx+1:03d}: {line.strip() or '(empty)'}" for idx, line in enumerate(lines)]
-        self["list"] = MenuList(self.items)
-        self["hint"] = Label("OK=Edit  EXIT=Cancel")
-        self["actions"] = ActionMap(
-            ["OkCancelActions","DirectionActions"],
-            {
-                "ok": self.ok,
-                "cancel": self.close,
-                "up": self["list"].up,
-                "down": self["list"].down
-            }, -1
-        )
+def clean(lines):
+    seen = set()
+    out = []
+    for l in lines:
+        if l not in seen:
+            seen.add(l)
+            out.append(l)
+    return out
 
-    def ok(self):
-        idx = self["list"].getSelectionIndex()
-        self.callback(idx)
-        self.close()
+def restartSoftcam():
+    os.system("killall -15 oscam ncam 2>/dev/null")
+    time.sleep(2)
+    os.system("killall -9 oscam ncam 2>/dev/null")
 
-# ---------------- HEX INPUT ----------------
-class HexKeyInput(Screen):
-    def __init__(self, session, callback, prefill=""):
-        Screen.__init__(self, session)
-        self.callback = callback
-        self.key = prefill
-        self.keys = ["1","2","3","4","5","6","7","8","9",
-                     "A","B","C","D","E","F","0","DEL","SAVE"]
-        self["key"] = Label("")
-        self["list"] = MenuList(self.keys)
-        self["hint"] = Label("OK=ADD  RED=DEL  YELLOW=SAVE  EXIT=Cancel")
-        self["actions"] = ActionMap(
-            ["OkCancelActions","ColorActions","NumberActions"],
-            {**{str(i): lambda x=str(i): self.add(x) for i in range(10)},
-             "ok": self.ok, "red": self.delete, "yellow": self.save, "cancel": self.close},
-            -1
-        )
-        self.update()
+def safeRead(path, default=0):
+    try:
+        return int(open(path).read())
+    except:
+        return default
 
-    def ok(self):
-        s = self["list"].getCurrent()
-        if s == "DEL":
-            self.delete()
-        elif s == "SAVE":
-            self.save()
-        else:
-            self.add(s)
-
-    def add(self, c):
-        if len(self.key) < 32:
-            self.key += c
-            self.update()
-
-    def delete(self):
-        self.key = self.key[:-1]
-        self.update()
-
-    def update(self):
-        v = self.key.ljust(32, "-")
-        self["key"].setText(" ".join(v[i:i+4] for i in range(0, 32, 4)))
-
-    def save(self):
-        if len(self.key) not in (16, 32):
-            self.session.open(MessageBox, "Key must be 16 or 32 HEX", MessageBox.TYPE_ERROR)
-            return
-        self.callback(self.key)
-        self.close()
+def validateSoftcam(data):
+    out = []
+    for l in data.splitlines():
+        l = l.strip()
+        if l.startswith(("BISS", "P:", "T:")):
+            out.append(l + "\n")
+    return out
 
 # ---------------- MAIN SCREEN ----------------
 class BISSPro(Screen):
     def __init__(self, session):
         Screen.__init__(self, session)
-        self.session = session
-        self["menu"] = MenuList(["Manage BISS Keys"])
-        self["status"] = Label("BISS Pro Ready")
-        # Action map example
-        self["actions"] = ActionMap(["OkCancelActions","DirectionActions"],
-                                    {"ok": self.menuSelected, "cancel": self.close,
-                                     "up": self["menu"].up, "down": self["menu"].down}, -1)
+        ensure()
+        self.startAuto()
 
-    def menuSelected(self):
-        # هنا هتفتح شاشة إدارة المفاتيح (مثال)
-        self.session.open(MessageBox, "Feature coming soon", MessageBox.TYPE_INFO)
+        self["menu"] = MenuList([
+            "View Keys Count",
+            "Add BISS from Channel",
+            "Add Manual BISS",
+            "Import from USB",
+            "Update Online",
+            "Auto Update Interval",
+            "Fixed Time Update",
+            "Restart Softcam"
+        ])
 
-# ---------------- PLUGIN ENTRY ----------------
+        self["actions"] = ActionMap(
+            ["OkCancelActions", "DirectionActions"],
+            {
+                "ok": self.ok,
+                "cancel": self.close,
+                "up": self["menu"].up,
+                "down": self["menu"].down
+            }, -1
+        )
+
+    def ok(self):
+        i = self["menu"].getSelectionIndex()
+        if i == 0: self.view()
+        elif i == 1: self.fromService()
+        elif i == 2: self.manual()
+        elif i == 3: self.importUSB()
+        elif i == 4: self.update(True)
+        elif i == 5: self.interval()
+        elif i == 6: self.fixed()
+        elif i == 7: restartSoftcam()
+
+    def view(self):
+        with open(BISS_FILE) as f:
+            biss = [l for l in f if l.startswith(("BISS", "P:", "T:"))]
+        self.session.open(MessageBox,
+            "Total Keys: %d" % len(biss),
+            MessageBox.TYPE_INFO)
+
+    def manual(self):
+        from Screens.InputBox import InputBox
+        def cb(k):
+            if not re.match("^[0-9A-F]{16,32}$", k):
+                self.session.open(MessageBox, "Invalid HEX Key", MessageBox.TYPE_ERROR)
+                return
+            backup()
+            with open(BISS_FILE, "a") as f:
+                f.write("\nBISS 0000:0000:0000:%s" % k)
+            restartSoftcam()
+            self.session.open(MessageBox, "Key Added", MessageBox.TYPE_INFO)
+
+        self.session.open(InputBox,
+            title="Enter HEX Key",
+            text="",
+            maxSize=32,
+            type=InputBox.TYPE_TEXT,
+            callback=cb)
+
+    def fromService(self):
+        try:
+            from enigma import iServiceInformation
+            s = self.session.nav.getCurrentService()
+            i = s.info()
+            sid = i.getInfo(iServiceInformation.sSID)
+            ts = i.getInfo(iServiceInformation.sTSID)
+            on = i.getInfo(iServiceInformation.sONID)
+        except:
+            self.session.open(MessageBox, "No active service", MessageBox.TYPE_ERROR)
+            return
+
+        from Screens.InputBox import InputBox
+        def cb(k):
+            line = "BISS %04X:%04X:%04X:%s" % (sid, ts, on, k)
+            backup()
+            with open(BISS_FILE, "a") as f:
+                f.write("\n" + line)
+            restartSoftcam()
+            self.session.open(MessageBox, "BISS Added", MessageBox.TYPE_INFO)
+
+        self.session.open(InputBox,
+            title="Enter HEX Key",
+            text="",
+            maxSize=32,
+            type=InputBox.TYPE_TEXT,
+            callback=cb)
+
+    def importUSB(self):
+        if not os.path.exists(USB_PATH):
+            self.session.open(MessageBox, "USB file not found", MessageBox.TYPE_ERROR)
+            return
+        backup()
+        shutil.copy(USB_PATH, BISS_FILE)
+        self.cleanup()
+        restartSoftcam()
+        self.session.open(MessageBox, "Imported from USB", MessageBox.TYPE_INFO)
+
+    def update(self, manual=False):
+        if not update_lock.acquire(False):
+            return
+        try:
+            for u in GITHUB_MIRRORS:
+                try:
+                    d = urlopen(u, timeout=10).read()
+                    if isinstance(d, bytes):
+                        d = d.decode("utf-8", "ignore")
+                    valid = validateSoftcam(d)
+                    if not valid:
+                        continue
+                    backup()
+                    with open(BISS_FILE, "w") as f:
+                        f.writelines(valid)
+                    self.cleanup()
+                    restartSoftcam()
+                    open(LAST_UPDATE, "w").write(str(int(time.time())))
+                    if manual:
+                        self.session.open(MessageBox, "Online Update Done", MessageBox.TYPE_INFO)
+                    return
+                except:
+                    pass
+            if manual:
+                self.session.open(MessageBox, "Update Failed", MessageBox.TYPE_ERROR)
+        finally:
+            update_lock.release()
+
+    def cleanup(self):
+        with open(BISS_FILE) as f:
+            lines = clean(f.readlines())
+        with open(BISS_FILE, "w") as f:
+            f.writelines(lines)
+
+    # -------- Auto Update --------
+    def startAuto(self):
+        if os.path.exists(INTERVAL_FILE):
+            threading.Thread(target=self.autoLoop, daemon=True).start()
+        if os.path.exists(FIXED_TIME_FILE):
+            threading.Thread(target=self.fixedLoop, daemon=True).start()
+
+    def autoLoop(self):
+        while True:
+            last = safeRead(LAST_UPDATE, 0)
+            interval = safeRead(INTERVAL_FILE, 0)
+            if interval > 0 and time.time() - last > interval:
+                self.update(False)
+            time.sleep(300)
+
+    def fixedLoop(self):
+        while True:
+            h = safeRead(FIXED_TIME_FILE, -1)
+            if h >= 0 and time.localtime().tm_hour == h:
+                self.update(False)
+                time.sleep(3600)
+            time.sleep(60)
+
+    def interval(self):
+        opts = [("3 Hours",10800),("6 Hours",21600),("12 Hours",43200),("Off",0)]
+        self.session.openWithCallback(
+            lambda c: open(INTERVAL_FILE,"w").write(str(c[1])) if c else None,
+            ChoiceBox, title="Auto Update Interval", list=opts
+        )
+
+    def fixed(self):
+        opts = [("%02d:00" % i, i) for i in range(24)]
+        self.session.openWithCallback(
+            lambda c: open(FIXED_TIME_FILE,"w").write(str(c[1])) if c else None,
+            ChoiceBox, title="Fixed Update Time", list=opts
+        )
+
+# ---------------- ENTRY ----------------
 def main(session, **kwargs):
     session.open(BISSPro)
 
 def Plugins(**kwargs):
-    return [PluginDescriptor(name=PLUGIN_NAME, description="Manage BISS Keys", 
-                             where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+    return [PluginDescriptor(
+        name=PLUGIN_NAME,
+        description="BISS Pro Manager v1.0",
+        where=PluginDescriptor.WHERE_PLUGINMENU,
+        fnc=main
+    )]
