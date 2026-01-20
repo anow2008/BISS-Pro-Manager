@@ -32,7 +32,7 @@ USB_PATH = "/media/usb/SoftCam.Key"
 
 GITHUB_MIRRORS = [
     "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key",
-    "https://raw.githubusercontent.com/oscam/SoftCam.Key/master/SoftCam.Key"
+    "https://raw.githubusercontent.com/MOHAMED19OS/SoftCam_Emu/refs/heads/main/SoftCam.Key"
 ]
 
 MAX_BACKUPS = 3
@@ -270,3 +270,4 @@ def Plugins(**kwargs):
         where=PluginDescriptor.WHERE_PLUGINMENU,
         fnc=main
     )]
+
