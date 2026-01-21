@@ -1,6 +1,0 @@
-<screen name="BISSPro" position="center,center" size="720,460" title="Biss Por v1.0" backgroundColor="#000000">
-    <widget name="title" position="20,20" size="680,50" font="Regular;30" halign="center" valign="center" foregroundColor="#00aaff"/>
-    <widget name="menu" position="40,90" size="640,220" font="Regular;26" itemHeight="55" foregroundColor="#ffffff" selectionColor="#00aaff" />
-    <widget name="progress" position="40,330" size="640,25" />
-    <widget name="status" position="40,370" size="640,70" font="Regular;22" halign="center" valign="center" foregroundColor="#00ffcc" />
-</screen>

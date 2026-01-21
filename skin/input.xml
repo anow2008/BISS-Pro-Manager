@@ -1,9 +1,0 @@
-<screen name="BissInputScreen" position="center,center" size="720,420" title="إدخال شفرة BISS" backgroundColor="#000000">
-    <widget name="title" position="20,20" size="680,50" font="Regular;30" halign="center" valign="center" foregroundColor="#00aaff"/>
-    <widget name="letters" position="40,80" size="640,40" font="Regular;24" halign="left" foregroundColor="#ffffff"/>
-    <widget name="line1" position="40,130" size="640,40" font="Regular;30" halign="center" foregroundColor="#ffffff"/>
-    <widget name="line2" position="40,180" size="640,40" font="Regular;30" halign="center" foregroundColor="#ffffff"/>
-    <widget name="line3" position="40,230" size="640,40" font="Regular;30" halign="center" foregroundColor="#ffffff"/>
-    <widget name="line4" position="40,280" size="640,40" font="Regular;30" halign="center" foregroundColor="#ffffff"/>
-    <widget name="help" position="40,330" size="640,50" font="Regular;20" halign="center" foregroundColor="#00ffcc"/>
-</screen>
