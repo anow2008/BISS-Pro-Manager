@@ -1,3 +1,8 @@
 #!/bin/sh
-killall -9 enigma2
+
+echo "📌 BissPro installed successfully."
+echo "ℹ️ Restarting Enigma2 automatically..."
+killall -15 enigma2
+sleep 2
+echo "✅ Enigma2 restarted."
 exit 0
