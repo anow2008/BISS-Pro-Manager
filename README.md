@@ -7,7 +7,12 @@ wget -qO- https://raw.githubusercontent.com/anow2008/BissPro/main/install.sh | s
 
 امر الحذف للبلجن 
 
-killall oscam ncam enigma2 2>/dev/null; rm -rf /usr/lib/enigma2/python/Plugins/Extensions/BissPro /var/keys/SoftCam.Key.bak /media/usb/SoftCam.Key; enigma2 &
+init 4
+killall oscam ncam 2>/dev/null
+rm -rf /usr/lib/enigma2/python/Plugins/Extensions/BissPro
+rm -rf /var/keys/SoftCam.Key.bak /media/usb/SoftCam.Key
+init 3
+
 
 
 
