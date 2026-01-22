@@ -22,7 +22,8 @@ PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
 ICON_PATH = PLUGIN_PATH + "/icons/"
 
 def get_key_path():
-    paths = ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key", "/usr/keys/SoftCam.Key", "/var/keys/SoftCam.Key"]
+    paths = ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key",
+             "/usr/keys/SoftCam.Key", "/var/keys/SoftCam.Key"]
     for p in paths:
         if os.path.exists(p): return p
     return "/etc/tuxbox/config/SoftCam.Key"
@@ -33,7 +34,7 @@ def restartSoftcam():
     cams = ["oscam","ncam","gcam","revcam","vicard"]
     active = None
     for cam in cams:
-        if os.system("pgrep -x %s >/dev/null 2>&1" % cam) == 0: # تم التصحيح لـ == 0
+        if os.system("pgrep -x %s >/dev/null 2>&1" % cam) == 0:
             active = cam
             break
     os.system("killall -q " + " ".join(cams) + " 2>/dev/null")
@@ -81,12 +82,28 @@ class EasyBissInput(Screen):
         self.refresh()
 
     def save_key(self):
-        line = "\nF %s0000 00 %s ;BissPro\n" % (self.sid, "".join(self.key))
+        new_line = "F %s0000 00 %s ;BissPro\n" % (self.sid, "".join(self.key))
         try:
-            with open(BISS_FILE, "a") as f: f.write(line)
+            # اقرأ محتويات الملف أولاً
+            existing_lines = []
+            if os.path.exists(BISS_FILE):
+                with open(BISS_FILE, "r") as f:
+                    existing_lines = [l.strip() for l in f]
+
+            # تحقق إذا المفتاح موجود مسبقاً
+            if new_line.strip() in existing_lines:
+                self["info"].setText("Key Already Exists!")
+                return  # لا تضيف المفتاح
+
+            # أضف المفتاح الجديد
+            with open(BISS_FILE, "a") as f:
+                f.write(new_line)
+
             restartSoftcam()
             self.close()
-        except: self.close()
+        except Exception as e:
+            self["info"].setText("Error Saving Key")
+            self.close()
 
 class BISSPro(Screen):
     skin = """
@@ -109,7 +126,6 @@ class BISSPro(Screen):
         self.menu_list = []
         for icon_file, text, action in menu_items:
             pix = LoadPixmap(ICON_PATH + icon_file)
-            # هيكل العنصر: (الأكشن، المحتوى المرئي)
             self.menu_list.append((action, [
                 MultiContentEntryPixmapAlphaTest(pos=(10, 5), size=(128, 128), png=pix),
                 MultiContentEntryText(pos=(150, 45), size=(650, 50), font=0, text=text)
@@ -126,7 +142,7 @@ class BISSPro(Screen):
     def ok(self):
         sel = self["menu"].getCurrent()
         if sel:
-            action = sel[0] # الآن الأكشن في العنصر الأول مباشرة
+            action = sel[0]
             if action == "add": self.session.open(EasyBissInput)
             elif action == "update": self.start_update()
             elif action == "restart":
@@ -145,8 +161,12 @@ class BISSPro(Screen):
             shutil.copy("/tmp/SoftCam.Key", BISS_FILE)
             restartSoftcam()
             self["status"].setText("Update Successful!")
-        except: self["status"].setText("Update Failed!")
+        except:
+            self["status"].setText("Update Failed!")
 
-def main(session, **kwargs): session.open(BISSPro)
+def main(session, **kwargs): 
+    session.open(BISSPro)
+
 def Plugins(**kwargs):
-    return [PluginDescriptor(name=PLUGIN_NAME, description="BISS Key Manager", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main, icon="plugin.png")]
+    return [PluginDescriptor(name=PLUGIN_NAME, description="BISS Key Manager",
+                             where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main, icon="plugin.png")]
