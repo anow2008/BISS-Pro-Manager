@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
 from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
-from Components.ProgressBar import ProgressBar
-from enigma import eTimer, iServiceInformation
-import os, time, threading
+from Components.Pixmap import Pixmap
+from Components.MultiContent import MultiContentEntryPixmapAlphaTest, MultiContentEntryText
+from enigma import iServiceInformation, gFont
+from Tools.LoadPixmap import LoadPixmap
+import os, time, shutil
 
 try:
     from urllib.request import urlretrieve
@@ -16,206 +17,136 @@ except ImportError:
 
 PLUGIN_NAME = "BissPro"
 PLUGIN_VERSION = "1.0"
-
-SOFTCAM_PATHS = [
-    "/etc/tuxbox/config/oscam/SoftCam.Key",
-    "/etc/tuxbox/config/SoftCam.Key",
-    "/usr/keys/SoftCam.Key",
-    "/var/keys/SoftCam.Key"
-]
+UPDATE_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
+PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
+ICON_PATH = PLUGIN_PATH + "/icons/"
 
 def get_key_path():
-    for p in SOFTCAM_PATHS:
-        if os.path.exists(p):
-            return p
+    paths = ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key", "/usr/keys/SoftCam.Key", "/var/keys/SoftCam.Key"]
+    for p in paths:
+        if os.path.exists(p): return p
     return "/etc/tuxbox/config/SoftCam.Key"
 
 BISS_FILE = get_key_path()
-UPDATE_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
 
 def restartSoftcam():
-    os.system("killall -15 oscam ncam gcam 2>/dev/null")
-    time.sleep(2)
-    os.system("killall -9 oscam ncam gcam 2>/dev/null")
-
-def get_existing_key(sid):
-    if not os.path.exists(BISS_FILE):
-        return None
-    try:
-        sid_hex = "%04X" % int(sid)
-        with open(BISS_FILE, "r") as f:
-            for line in f:
-                if line.upper().startswith("F %s" % sid_hex):
-                    parts = line.split()
-                    for p in parts:
-                        if len(p) == 16:
-                            return p
-    except:
-        pass
-    return None
-
-# ================= Easy Input Screen =================
+    cams = ["oscam","ncam","gcam","revcam","vicard"]
+    active = None
+    for cam in cams:
+        if os.system("pgrep -x %s >/dev/null 2>&1" % cam) == 0: # تم التصحيح لـ == 0
+            active = cam
+            break
+    os.system("killall -q " + " ".join(cams) + " 2>/dev/null")
+    time.sleep(1)
+    os.system("%s -b &" % (active if active else "oscam"))
 
 class EasyBissInput(Screen):
     skin = """
-    <screen name="EasyBissInput" position="center,center" size="720,320" title="Enter BISS Key">
-        <widget name="title" position="20,10" size="680,40" font="Regular;32" halign="center" foregroundColor="#00aaff"/>
-        <widget name="keyline" position="30,80" size="660,60" font="Regular;36" halign="center" foregroundColor="#00ff00"/>
-        <widget name="hint" position="20,160" size="680,40" font="Regular;22" halign="center" foregroundColor="#aaaaaa"/>
-        <widget name="keys" position="20,210" size="680,40" font="Regular;20" halign="center" foregroundColor="#ffffff"/>
+    <screen position="center,center" size="900,520" title="BISS Key Editor" backgroundColor="#0e1117">
+        <eLabel position="0,0" size="900,80" backgroundColor="#161b22"/>
+        <widget name="info" position="50,100" size="800,40" font="Regular;28" halign="center" foregroundColor="#58a6ff" transparent="1"/>
+        <widget name="keyline" position="120,185" size="660,80" font="Console;70" halign="center" foregroundColor="#3fb950" transparent="1"/>
+        <eLabel text="RED: EXIT  |  GREEN: SAVE  |  OK: HEX (A-F)" position="50,450" size="800,40" font="Regular;24" halign="center" transparent="1"/>
     </screen>
     """
-
-    def __init__(self, session, current_key=None):
+    def __init__(self, session):
         Screen.__init__(self, session)
-        self.key = list(current_key if (current_key and len(current_key) == 16) else "0000000000000000")
-        self.pos = 0
-        self["title"] = Label("Edit BISS Key")
-        self["hint"] = Label("◀ ▶ Move   ▲ ▼ Change   0-9 Direct")
-        self["keys"] = Label("🟢 Save    🟡 Clear    🔴 Cancel")
+        self.key = list("0000000000000000")
+        self.pos, self.hex_index = 0, 0
+        self.hex_chars = ["A","B","C","D","E","F"]
+        s = session.nav.getCurrentService()
+        self.sid = "%04X"%s.info().getInfo(iServiceInformation.sSID) if s else "0000"
         self["keyline"] = Label("")
+        self["info"] = Label("Target Channel SID: %s" % self.sid)
+        self["actions"] = ActionMap(["OkCancelActions","ColorActions","DirectionActions","NumberActions"],{
+            "ok": self.toggle_hex, "left": self.prev, "right": self.next, "green": self.save_key, "red": self.close, "cancel": self.close,
+            **{str(i):(lambda x=str(i): self.set_char(x)) for i in range(10)}
+        },-1)
         self.refresh()
-        self["actions"] = ActionMap(
-            ["ColorActions", "DirectionActions", "NumberActions", "OkCancelActions"],
-            {
-                "left": self.left, "right": self.right, "up": self.up, "down": self.down,
-                "0": lambda: self.set_char("0"), "1": lambda: self.set_char("1"),
-                "2": lambda: self.set_char("2"), "3": lambda: self.set_char("3"),
-                "4": lambda: self.set_char("4"), "5": lambda: self.set_char("5"),
-                "6": lambda: self.set_char("6"), "7": lambda: self.set_char("7"),
-                "8": lambda: self.set_char("8"), "9": lambda: self.set_char("9"),
-                "green": self.save, "yellow": self.clear,
-                "red": self.close, "cancel": self.close,
-            }, -1)
 
     def refresh(self):
-        txt = ""
-        for i, c in enumerate(self.key):
-            txt += "[%s] " % c if i == self.pos else " %s  " % c
-        self["keyline"].setText(txt)
+        self["keyline"].setText("".join("[%s]"%c if i==self.pos else " %s "%c for i,c in enumerate(self.key)))
 
-    def left(self): self.pos = (self.pos - 1) % 16; self.refresh()
-    def right(self): self.pos = (self.pos + 1) % 16; self.refresh()
-    def up(self):
-        v = (int(self.key[self.pos], 16) + 1) % 16
-        self.key[self.pos] = "%X" % v
-        self.refresh()
-    def down(self):
-        v = (int(self.key[self.pos], 16) - 1) % 16
-        self.key[self.pos] = "%X" % v
-        self.refresh()
-    def set_char(self, ch):
-        self.key[self.pos] = ch
-        self.right()
-    def clear(self):
-        self.key = list("0000000000000000")
-        self.pos = 0
-        self.refresh()
-    def save(self):
-        self.close("".join(self.key))
+    def set_char(self, c):
+        self.key[self.pos] = c
+        self.next()
 
-# ================= Main Screen =================
+    def toggle_hex(self):
+        self.key[self.pos] = self.hex_chars[self.hex_index]
+        self.hex_index = (self.hex_index + 1) % 6
+        self.refresh()
+
+    def next(self):
+        self.pos = (self.pos + 1) % 16
+        self.refresh()
+
+    def save_key(self):
+        line = "\nF %s0000 00 %s ;BissPro\n" % (self.sid, "".join(self.key))
+        try:
+            with open(BISS_FILE, "a") as f: f.write(line)
+            restartSoftcam()
+            self.close()
+        except: self.close()
 
 class BISSPro(Screen):
     skin = """
-    <screen name="BISSPro" position="center,center" size="800,500" title="BissPro v1.0">
-        <widget name="title" position="20,10" size="760,50" font="Regular;36" halign="center" foregroundColor="#00aaff"/>
-        <widget name="menu" position="120,90" size="560,240" font="Regular;28" itemHeight="60"/>
-        <widget name="progress" position="80,350" size="640,18"/>
-        <widget name="status" position="40,380" size="720,90" font="Regular;24" halign="center" foregroundColor="#ffffff"/>
+    <screen position="center,center" size="900,540" title="BissPro Manager" backgroundColor="#0e1117">
+        <eLabel position="0,0" size="900,70" backgroundColor="#161b22"/>
+        <eLabel text="BissPro Controller" position="30,15" size="840,40" font="Regular;32" foregroundColor="#58a6ff" transparent="1"/>
+        <widget name="menu" position="30,100" size="840,320" itemHeight="140" scrollbarMode="showOnDemand" transparent="1"/>
+        <widget name="status" position="50,470" size="800,40" font="Regular;24" foregroundColor="#3fb950" halign="center" transparent="1"/>
     </screen>
     """
-
     def __init__(self, session):
         Screen.__init__(self, session)
-        self.menu_items = [
-            ("⬇️ Update Softcam Online", "update"),
-            ("➕ Add/Edit BISS Key", "add"),
-            ("🔄 Restart Softcam", "restart"),
-            ("📊 Keys Count", "count"),
+        self["status"] = Label("Ready")
+        menu_items = [
+            ("add.png", "➕ Add Key (Current Channel)", "add"),
+            ("update.png", "🌐 Online Update SoftCam", "update"),
+            ("restart.png", "♻️ Restart Softcam", "restart"),
+            ("count.png", "📊 Count Total Keys", "count")
         ]
-        self["title"] = Label("BissPro v1.0 | Smart Editor")
-        self["menu"] = MenuList(self.menu_items)
-        self["status"] = Label("Select option")
-        self["progress"] = ProgressBar()
-        self["actions"] = ActionMap(
-            ["OkCancelActions", "DirectionActions"],
-            {
-                "ok": self.ok, "cancel": self.close,
-                "up": self["menu"].up, "down": self["menu"].down
-            }, -1)
+        self.menu_list = []
+        for icon_file, text, action in menu_items:
+            pix = LoadPixmap(ICON_PATH + icon_file)
+            # هيكل العنصر: (الأكشن، المحتوى المرئي)
+            self.menu_list.append((action, [
+                MultiContentEntryPixmapAlphaTest(pos=(10, 5), size=(128, 128), png=pix),
+                MultiContentEntryText(pos=(150, 45), size=(650, 50), font=0, text=text)
+            ]))
+        
+        self["menu"] = MenuList(self.menu_list)
+        self["menu"].l.setItemHeight(140)
+        self["menu"].l.setFont(0, gFont("Regular", 28))
+        
+        self["actions"] = ActionMap(["OkCancelActions","DirectionActions"], {
+            "ok": self.ok, "cancel": self.close, "up": self["menu"].up, "down": self["menu"].down
+        }, -1)
 
     def ok(self):
-        cmd = self["menu"].getCurrent()[1]
-        if cmd == "update": self.start_update()
-        elif cmd == "restart":
-            restartSoftcam()
-            self["status"].setText("♻️ Softcam Restarted")
-        elif cmd == "count":
-            count = 0
-            if os.path.exists(BISS_FILE):
-                with open(BISS_FILE, "r") as f:
-                    count = sum(1 for l in f if l.upper().startswith("F "))
-            self["status"].setText("📊 Total Keys in File: %d" % count)
-        elif cmd == "add":
-            self.add_key()
-
-    def add_key(self):
-        s = self.session.nav.getCurrentService()
-        if not s:
-            self["status"].setText("❌ Error: No active channel found")
-            return
-        sid = s.info().getInfo(iServiceInformation.sSID)
-        old = get_existing_key(sid)
-        self.session.openWithCallback(self.save_key, EasyBissInput, old)
-
-    def save_key(self, key):
-        if not key:
-            return
-        s = self.session.nav.getCurrentService().info()
-        sid_hex = "%04X" % s.getInfo(iServiceInformation.sSID)
-        name = s.getName()
-        line = "F %s1FFF 00 %s ; %s\n" % (sid_hex, key, name)
-
-        parent_dir = os.path.dirname(BISS_FILE)
-        if not os.path.exists(parent_dir):
-            os.makedirs(parent_dir)
-
-        lines = []
-        if os.path.exists(BISS_FILE):
-            with open(BISS_FILE, "r") as f:
-                lines = [l for l in f if not l.upper().startswith("F %s" % sid_hex)]
-
-        lines.append(line)
-        with open(BISS_FILE, "w") as f:
-            f.writelines(lines)
-
-        restartSoftcam()
-        self["status"].setText("✅ Key Saved for: %s" % name)
+        sel = self["menu"].getCurrent()
+        if sel:
+            action = sel[0] # الآن الأكشن في العنصر الأول مباشرة
+            if action == "add": self.session.open(EasyBissInput)
+            elif action == "update": self.start_update()
+            elif action == "restart":
+                restartSoftcam()
+                self["status"].setText("Softcam Restarted!")
+            elif action == "count":
+                if os.path.exists(BISS_FILE):
+                    with open(BISS_FILE) as f:
+                        c = sum(1 for l in f if l.upper().startswith("F "))
+                    self["status"].setText("Total Keys Found: %d" % c)
 
     def start_update(self):
-        self["status"].setText("⬇️ Downloading...")
-        self["progress"].setValue(10)
-        threading.Thread(target=self.update_process).start()
-
-    def update_process(self):
+        self["status"].setText("Updating Online...")
         try:
-            urlretrieve(UPDATE_URL, BISS_FILE)
-            eTimer.singleShot(100, lambda: self["status"].setText("✅ Online Update Success"))
-            eTimer.singleShot(100, lambda: self["progress"].setValue(100))
+            urlretrieve(UPDATE_URL, "/tmp/SoftCam.Key")
+            shutil.copy("/tmp/SoftCam.Key", BISS_FILE)
             restartSoftcam()
-        except:
-            eTimer.singleShot(100, lambda: self["status"].setText("❌ Download Failed! Check Internet"))
+            self["status"].setText("Update Successful!")
+        except: self["status"].setText("Update Failed!")
 
-def main(session, **kwargs):
-    session.open(BISSPro)
-
+def main(session, **kwargs): session.open(BISSPro)
 def Plugins(**kwargs):
-    return [
-        PluginDescriptor(
-            name=PLUGIN_NAME,
-            description="Edit BISS Key or Update Online v1.0",
-            where=PluginDescriptor.WHERE_PLUGINMENU,
-            fnc=main
-        )
-    ]
+    return [PluginDescriptor(name=PLUGIN_NAME, description="BISS Key Manager", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main, icon="plugin.png")]
