@@ -20,6 +20,7 @@ PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
 ICON_PATH = PLUGIN_PATH + "/icons/"
 UPDATE_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
 
+# ======= الحصول على مسار ملف SoftCam.Key =======
 def get_key_path():
     paths = [
         "/etc/tuxbox/config/oscam/SoftCam.Key",
@@ -33,6 +34,7 @@ def get_key_path():
 
 BISS_FILE = get_key_path()
 
+# ======= عمل نسخة احتياطية =======
 def create_backup():
     if os.path.exists(BISS_FILE):
         b = BISS_FILE + ".bak_" + datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -40,6 +42,7 @@ def create_backup():
         return b
     return None
 
+# ======= إعادة تشغيل SoftCam =======
 def restartSoftcam():
     cams = ["oscam","ncam","gcam","revcam","vicard"]
     active = None
@@ -52,11 +55,10 @@ def restartSoftcam():
     time.sleep(1)
     cam_to_run = active if active else "oscam"
     path = "/usr/bin/" + cam_to_run
-    # تشغيل SoftCam في الخلفية
     os.system("%s -b >/dev/null 2>&1 &" % (path if os.path.exists(path) else cam_to_run))
-    time.sleep(1)  # قليل من الانتظار لتأكيد التشغيل
+    time.sleep(1)
 
-# ===== Key Selection Screen =====
+# ======= شاشة اختيار الشفرة =======
 class SelectKeyScreen(Screen):
     skin = """
     <screen position="center,center" size="720,420" title="Select BISS Key">
@@ -85,7 +87,7 @@ class SelectKeyScreen(Screen):
         sel = self["list"].getCurrent()
         self.close(sel[0] if sel else None)
 
-# ===== BISS Key Editor =====
+# ======= محرر الشفرات BISS =======
 class EasyBissInput(Screen):
     skin = """
     <screen position="center,center" size="820,300" title="BISS Editor">
@@ -149,7 +151,7 @@ class EasyBissInput(Screen):
         restartSoftcam()
         self.close(True)
 
-# ===== Main Plugin Screen =====
+# ======= الشاشة الرئيسية للبلجن =======
 class BISSPro(Screen):
     skin = """
     <screen position="center,center" size="1024,768" title="BissPro v1.0">
@@ -213,6 +215,7 @@ class BISSPro(Screen):
     def completeAction(self, success=False):
         if success: self.close()
 
+# ======= نقطة دخول البلجن =======
 def main(session, **kwargs):
     session.open(BISSPro)
 
