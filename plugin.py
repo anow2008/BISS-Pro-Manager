@@ -84,10 +84,8 @@ class SelectKeyScreen(Screen):
 
     def ok(self):
         sel = self["list"].getCurrent()
-        if sel:
-            self.close(sel[0])
-        else:
-            self.close(None)
+        if sel: self.close(sel[0])
+        else: self.close(None)
 
 # ===== BISS Key Editor =====
 class EasyBissInput(Screen):
@@ -97,11 +95,12 @@ class EasyBissInput(Screen):
         <widget name="hexlist" position="720,100" size="80,200" itemHeight="40"/>
     </screen>
     """
-    def __init__(self, session, sid, mode="add", key_line=None):
+    def __init__(self, session, sid, mode="add", key_line=None, sname="Unknown"):
         Screen.__init__(self, session)
         self.sid = sid
         self.mode = mode
         self.key_line = key_line
+        self.sname = sname # اسم القناة
         self.chars = ["A","B","C","D","E","F"]
         self.key = list("0000000000000000")
         self.pos = 0
@@ -122,8 +121,7 @@ class EasyBissInput(Screen):
     def load_from_line(self):
         try:
             self.key = list(self.key_line.split()[3])[:16]
-        except:
-            pass
+        except: pass
 
     def refresh(self):
         res = "".join(["[%s]" % c if i==self.pos else " %s " % c for i,c in enumerate(self.key)])
@@ -140,7 +138,8 @@ class EasyBissInput(Screen):
         if sel: self.set_char(sel[0])
 
     def save(self):
-        new_line = "F %s 00 %s ;BissPro" % (self.sid, "".join(self.key))
+        # إضافة اسم القناة كتعليق بجانب الشفرة
+        new_line = "F %s 00 %s ;%s" % (self.sid, "".join(self.key), self.sname)
         create_backup()
         lines = []
         if os.path.exists(BISS_FILE):
@@ -148,10 +147,10 @@ class EasyBissInput(Screen):
         with open(BISS_FILE,"w") as f:
             for l in lines:
                 if self.mode=="edit" and self.key_line and l.strip()==self.key_line.strip(): continue
-                f.write(l+"\n")
+                if l: f.write(l+"\n")
             f.write(new_line+"\n")
         restartSoftcam()
-        self.close(True)  # يغلق البلجن بالكامل بعد الحفظ
+        self.close(True)
 
 # ===== Main Plugin Screen =====
 class BISSPro(Screen):
@@ -166,7 +165,7 @@ class BISSPro(Screen):
             ("Add Key","add","add.png"),
             ("Edit Key","edit","edit.png"),
             ("Delete Key","delete","delete.png"),
-            ("Update SoftCam.Key","update","update.png"),
+            ("Update SoftCam","update","update.png"),
         ]
         self.menu_list=[]
         for t,a,i in self.menu_items:
@@ -184,12 +183,14 @@ class BISSPro(Screen):
         action=sel[0]
         service=self.session.nav.getCurrentService()
         if not service: return
-        sid="%04X" % service.info().getInfo(iServiceInformation.sSID)
+        info = service.info()
+        sid = "%04X" % info.getInfo(iServiceInformation.sSID)
+        sname = info.getName().replace(' ', '_') # جلب اسم القناة وتغيير المسافات بـ _
 
         if action=="add":
-            self.session.openWithCallback(self.completeAction, EasyBissInput, sid)
+            self.session.openWithCallback(self.completeAction, EasyBissInput, sid, "add", None, sname)
         elif action=="edit" or action=="delete":
-            self.session.openWithCallback(lambda line: self.handle(action,sid,line), SelectKeyScreen, sid, lambda x:x)
+            self.session.openWithCallback(lambda line: self.handle(action,sid,line,sname), SelectKeyScreen, sid, lambda x:x)
         elif action=="update":
             create_backup()
             try:
@@ -197,12 +198,12 @@ class BISSPro(Screen):
                 shutil.copy("/tmp/SoftCam.Key",BISS_FILE)
                 restartSoftcam()
             except: pass
-            self.close()  # العودة فورًا للقناة بعد التحديث
+            self.close()
 
-    def handle(self, action, sid, line):
+    def handle(self, action, sid, line, sname):
         if not line: return
         if action=="edit":
-            self.session.openWithCallback(self.completeAction, EasyBissInput, sid, "edit", line)
+            self.session.openWithCallback(self.completeAction, EasyBissInput, sid, "edit", line, sname)
         elif action=="delete":
             create_backup()
             with open(BISS_FILE,"r") as f: lines=f.readlines()
@@ -210,12 +211,11 @@ class BISSPro(Screen):
                 for l in lines:
                     if l.strip()!=line.strip(): f.write(l)
             restartSoftcam()
-            self.close()  # العودة للقناة مباشرة بعد الحذف
+            self.close()
 
     def completeAction(self, success=False):
         if success: self.close()
 
-# ===== Plugin Entry =====
 def main(session, **kwargs):
     session.open(BISSPro)
 
