@@ -12,7 +12,6 @@ from Tools.LoadPixmap import LoadPixmap
 import os, time, shutil
 from datetime import datetime
 
-# ===== Python 2 / 3 Compatibility =====
 try:
     from urllib.request import urlretrieve
 except ImportError:
@@ -162,31 +161,49 @@ class EasyBissInput(Screen):
         restartSoftcam()
         self.session.openWithCallback(self.close, MessageBox, "Key Saved & Softcam Restarted!", MessageBox.TYPE_INFO, timeout=3)
 
-# ===== Main Plugin Screen =====
+# ===== Main Plugin Screen (متوافق مع icons 128x128 + شاشة أكبر) =====
 class BISSPro(Screen):
     skin = """
-    <screen position="center,center" size="900,540" title="BissPro v1.0">
-        <widget name="menu" position="30,100" size="840,320" itemHeight="80" scrollbarMode="showOnDemand"/>
-        <widget name="status" position="50,470" size="800,40" font="Regular;24" halign="center"/>
+    <screen position="center,center" size="1024,768" title="BissPro v1.0">
+        <widget name="menu" position="40,100" size="940,540" itemHeight="150" scrollbarMode="showOnDemand"/>
+        <widget name="status" position="40,660" size="940,50" font="Regular;32" halign="center"/>
     </screen>
     """
     def __init__(self, session):
         Screen.__init__(self, session)
         self["status"] = Label("Ready")
+
         self.menu_items = [
             ("Add Key (Current Channel)","add","add.png"),
             ("Edit Key (Current SID)","edit","edit.png"),
             ("Delete Key (Current SID)","delete","delete.png"),
             ("Online Update SoftCam.Key","update","update.png"),
         ]
-        self.menu_list=[]
+
+        self.menu_list = []
         for text, action, icon in self.menu_items:
-            pix = LoadPixmap(ICON_PATH+icon)
-            self.menu_list.append((action, [MultiContentEntryPixmapAlphaTest(pos=(10,10), size=(60,60), png=pix),
-                                            MultiContentEntryText(pos=(100,15), size=(650,50), font=0, text=text)]))
-        self["menu"]=MenuList(self.menu_list)
-        self["menu"].l.setFont(0,gFont("Regular",28))
-        self["actions"]=ActionMap(["OkCancelActions","DirectionActions"],{"ok":self.ok,"cancel":self.close,"up":self["menu"].up,"down":self["menu"].down},-1)
+            pix = LoadPixmap(ICON_PATH + icon)
+            self.menu_list.append((
+                action,
+                [
+                    MultiContentEntryPixmapAlphaTest(pos=(10,10), size=(128,128), png=pix),
+                    MultiContentEntryText(pos=(160,50), size=(760,60), font=0, text=text)
+                ]
+            ))
+
+        self["menu"] = MenuList(self.menu_list)
+        self["menu"].l.setFont(0, gFont("Regular",32))
+
+        self["actions"] = ActionMap(
+            ["OkCancelActions","DirectionActions"],
+            {
+                "ok": self.ok,
+                "cancel": self.close,
+                "up": self["menu"].up,
+                "down": self["menu"].down
+            },
+            -1
+        )
 
     def ok(self):
         sel = self["menu"].getCurrent()
