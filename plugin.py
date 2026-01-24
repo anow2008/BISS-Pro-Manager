@@ -52,10 +52,9 @@ def restartSoftcam():
     time.sleep(1)
     cam_to_run = active if active else "oscam"
     path = "/usr/bin/" + cam_to_run
-    if os.path.exists(path):
-        os.system("%s -b &" % path)
-    else:
-        os.system("%s -b &" % cam_to_run)
+    # تشغيل SoftCam في الخلفية
+    os.system("%s -b >/dev/null 2>&1 &" % (path if os.path.exists(path) else cam_to_run))
+    time.sleep(1)  # قليل من الانتظار لتأكيد التشغيل
 
 # ===== Key Selection Screen =====
 class SelectKeyScreen(Screen):
@@ -84,8 +83,7 @@ class SelectKeyScreen(Screen):
 
     def ok(self):
         sel = self["list"].getCurrent()
-        if sel: self.close(sel[0])
-        else: self.close(None)
+        self.close(sel[0] if sel else None)
 
 # ===== BISS Key Editor =====
 class EasyBissInput(Screen):
@@ -100,7 +98,8 @@ class EasyBissInput(Screen):
         self.sid = sid
         self.mode = mode
         self.key_line = key_line
-        self.sname = sname # اسم القناة
+        # فلترة اسم القناة من أي رموز غير مناسبة
+        self.sname = ''.join(c for c in sname if c.isalnum() or c in ('_','-')) or "Unknown"
         self.chars = ["A","B","C","D","E","F"]
         self.key = list("0000000000000000")
         self.pos = 0
@@ -119,8 +118,7 @@ class EasyBissInput(Screen):
         self.refresh()
 
     def load_from_line(self):
-        try:
-            self.key = list(self.key_line.split()[3])[:16]
+        try: self.key = list(self.key_line.split()[3])[:16]
         except: pass
 
     def refresh(self):
@@ -138,7 +136,6 @@ class EasyBissInput(Screen):
         if sel: self.set_char(sel[0])
 
     def save(self):
-        # إضافة اسم القناة كتعليق بجانب الشفرة
         new_line = "F %s 00 %s ;%s" % (self.sid, "".join(self.key), self.sname)
         create_backup()
         lines = []
@@ -185,7 +182,7 @@ class BISSPro(Screen):
         if not service: return
         info = service.info()
         sid = "%04X" % info.getInfo(iServiceInformation.sSID)
-        sname = info.getName().replace(' ', '_') # جلب اسم القناة وتغيير المسافات بـ _
+        sname = info.getName().replace(' ', '_')
 
         if action=="add":
             self.session.openWithCallback(self.completeAction, EasyBissInput, sid, "add", None, sname)
