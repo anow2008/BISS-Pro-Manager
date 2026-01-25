@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
+from Screens.MessageBox import MessageBox
 from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
@@ -20,7 +21,6 @@ PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
 ICON_PATH = PLUGIN_PATH + "/icons/"
 UPDATE_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
 
-# ======= الحصول على مسار ملف SoftCam.Key =======
 def get_key_path():
     paths = [
         "/etc/tuxbox/config/oscam/SoftCam.Key",
@@ -34,7 +34,6 @@ def get_key_path():
 
 BISS_FILE = get_key_path()
 
-# ======= عمل نسخة احتياطية =======
 def create_backup():
     if os.path.exists(BISS_FILE):
         b = BISS_FILE + ".bak_" + datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -42,7 +41,6 @@ def create_backup():
         return b
     return None
 
-# ======= إعادة تشغيل SoftCam =======
 def restartSoftcam():
     cams = ["oscam","ncam","gcam","revcam","vicard"]
     active = None
@@ -58,7 +56,6 @@ def restartSoftcam():
     os.system("%s -b >/dev/null 2>&1 &" % (path if os.path.exists(path) else cam_to_run))
     time.sleep(1)
 
-# ======= شاشة اختيار الشفرة =======
 class SelectKeyScreen(Screen):
     skin = """
     <screen position="center,center" size="720,420" title="Select BISS Key">
@@ -79,7 +76,8 @@ class SelectKeyScreen(Screen):
             with open(BISS_FILE,"r") as f:
                 for l in f:
                     l = l.strip()
-                    if l.upper().startswith("F %s " % self.sid.upper()):
+                    parts = l.split()
+                    if len(parts) >= 4 and parts[0].upper() == "F" and parts[1].upper() == self.sid.upper():
                         items.append((l,l))
         self["list"].setList(items)
 
@@ -87,7 +85,6 @@ class SelectKeyScreen(Screen):
         sel = self["list"].getCurrent()
         self.close(sel[0] if sel else None)
 
-# ======= محرر الشفرات BISS =======
 class EasyBissInput(Screen):
     skin = """
     <screen position="center,center" size="820,300" title="BISS Editor">
@@ -100,7 +97,6 @@ class EasyBissInput(Screen):
         self.sid = sid
         self.mode = mode
         self.key_line = key_line
-        # فلترة اسم القناة من أي رموز غير مناسبة
         self.sname = ''.join(c for c in sname if c.isalnum() or c in ('_','-')) or "Unknown"
         self.chars = ["A","B","C","D","E","F"]
         self.key = list("0000000000000000")
@@ -120,8 +116,14 @@ class EasyBissInput(Screen):
         self.refresh()
 
     def load_from_line(self):
-        try: self.key = list(self.key_line.split()[3])[:16]
-        except: pass
+        parts = self.key_line.split()
+        if len(parts) >= 4:
+            key = parts[3]
+            if len(key) == 16:
+                self.key = list(key)
+            else:
+                self.key = list("0000000000000000")
+                self.session.open(MessageBox, "Invalid key format in file", MessageBox.TYPE_ERROR, 3)
 
     def refresh(self):
         res = "".join(["[%s]" % c if i==self.pos else " %s " % c for i,c in enumerate(self.key)])
@@ -138,7 +140,12 @@ class EasyBissInput(Screen):
         if sel: self.set_char(sel[0])
 
     def save(self):
-        new_line = "F %s 00 %s ;%s" % (self.sid, "".join(self.key), self.sname)
+        new_key = "".join(self.key)
+        if len(new_key) != 16:
+            self.session.open(MessageBox, "Invalid Key Length", MessageBox.TYPE_ERROR, 3)
+            return
+
+        new_line = "F %s 00000000 %s ;%s" % (self.sid, new_key, self.sname)
         create_backup()
         lines = []
         if os.path.exists(BISS_FILE):
@@ -148,10 +155,11 @@ class EasyBissInput(Screen):
                 if self.mode=="edit" and self.key_line and l.strip()==self.key_line.strip(): continue
                 if l: f.write(l+"\n")
             f.write(new_line+"\n")
-        restartSoftcam()
-        self.close(True)
 
-# ======= الشاشة الرئيسية للبلجن =======
+        restartSoftcam()
+
+        self.session.openWithCallback(lambda _: self.close(), MessageBox, "Key saved successfully", MessageBox.TYPE_INFO, 3)
+
 class BISSPro(Screen):
     skin = """
     <screen position="center,center" size="1024,768" title="BissPro v1.0">
@@ -183,7 +191,7 @@ class BISSPro(Screen):
         service=self.session.nav.getCurrentService()
         if not service: return
         info = service.info()
-        sid = "%04X" % info.getInfo(iServiceInformation.sSID)
+        sid = "%08X" % info.getInfo(iServiceInformation.sSID)
         sname = info.getName().replace(' ', '_')
 
         if action=="add":
@@ -194,28 +202,38 @@ class BISSPro(Screen):
             create_backup()
             try:
                 urlretrieve(UPDATE_URL,"/tmp/SoftCam.Key")
-                shutil.copy("/tmp/SoftCam.Key",BISS_FILE)
-                restartSoftcam()
-            except: pass
-            self.close()
+                if os.path.exists("/tmp/SoftCam.Key") and os.path.getsize("/tmp/SoftCam.Key") > 100:
+                    shutil.copy("/tmp/SoftCam.Key",BISS_FILE)
+                    restartSoftcam()
+                    self.session.openWithCallback(lambda _: self.close(), MessageBox, "SoftCam updated successfully", MessageBox.TYPE_INFO, 3)
+                else:
+                    self.session.open(MessageBox, "Update failed!", MessageBox.TYPE_ERROR, 3)
+            except:
+                self.session.open(MessageBox, "Update failed!", MessageBox.TYPE_ERROR, 3)
 
     def handle(self, action, sid, line, sname):
         if not line: return
         if action=="edit":
             self.session.openWithCallback(self.completeAction, EasyBissInput, sid, "edit", line, sname)
         elif action=="delete":
-            create_backup()
-            with open(BISS_FILE,"r") as f: lines=f.readlines()
-            with open(BISS_FILE,"w") as f:
-                for l in lines:
-                    if l.strip()!=line.strip(): f.write(l)
-            restartSoftcam()
-            self.close()
+            self.session.openWithCallback(lambda confirmed: self.delete_confirmed(confirmed, line), MessageBox,
+                                         "Are you sure you want to delete this key?", MessageBox.TYPE_YESNO, 3)
+
+    def delete_confirmed(self, confirmed, line):
+        if not confirmed:
+            return
+        create_backup()
+        with open(BISS_FILE,"r") as f: lines=f.readlines()
+        with open(BISS_FILE,"w") as f:
+            for l in lines:
+                if l.strip()!=line.strip(): f.write(l)
+
+        restartSoftcam()
+        self.session.openWithCallback(lambda _: self.close(), MessageBox, "Key deleted successfully", MessageBox.TYPE_INFO, 3)
 
     def completeAction(self, success=False):
-        if success: self.close()
+        self.close()
 
-# ======= نقطة دخول البلجن =======
 def main(session, **kwargs):
     session.open(BISSPro)
 
