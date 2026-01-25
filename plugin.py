@@ -58,7 +58,7 @@ def restartSoftcam(session, force=False):
             active_cam = cam
             break
 
-    if not force:
+    if not force and session is not None:
         service = session.nav.getCurrentService()
         if service:
             info = service.info()
@@ -207,14 +207,16 @@ def fetch_biss_txt():
     except:
         return False
 
-def fetch_update_softcam():
+def fetch_update_softcam(session):
+    """
+    Fetch latest SoftCam.Key and restart Softcam with session context
+    """
     try:
         urlretrieve(UPDATE_URL, "/tmp/SoftCam.Key")
         if os.path.exists("/tmp/SoftCam.Key"):
             create_backup()
             shutil.copy("/tmp/SoftCam.Key", BISS_FILE)
-            # force restart
-            restartSoftcam(session=None, force=True)
+            restartSoftcam(session, force=True)
             return True
     except:
         return False
@@ -367,7 +369,7 @@ class BISSPro(Screen):
                     self.close()
             self.session.open(DeleteKeyScreen)
         elif action == "update":
-            if fetch_update_softcam():
+            if fetch_update_softcam(self.session):
                 self.session.open(MessageBox, "SoftCam updated successfully!", MessageBox.TYPE_INFO, 3)
             else:
                 self.session.open(MessageBox, "Update failed!", MessageBox.TYPE_ERROR, 3)
