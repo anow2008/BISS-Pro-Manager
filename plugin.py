@@ -42,16 +42,26 @@ def create_backup():
         return b
     return None
 
+# Restart softcam safely
 def restartSoftcam():
     cams = ["oscam", "ncam", "gcam", "revcam", "vicard"]
     active = None
+
     for cam in cams:
         if os.system("pgrep -x %s >/dev/null 2>&1" % cam) == 0:
             active = cam
             break
+
+    for cam in cams:
+        os.system("killall %s 2>/dev/null" % cam)
+
+    time.sleep(1)
+
     for cam in cams:
         os.system("killall -9 %s 2>/dev/null" % cam)
+
     time.sleep(1)
+
     cam_to_run = active if active else "oscam"
     path = "/usr/bin/" + cam_to_run
     os.system("%s -b >/dev/null 2>&1 &" % (path if os.path.exists(path) else cam_to_run))
@@ -83,6 +93,17 @@ class SelectKeyScreen(Screen):
                     parts = l.split()
                     if len(parts) >= 4 and parts[0].upper() == "F" and parts[1].upper() == self.sid.upper():
                         items.append((l, l))
+
+        if not items:
+            self.session.open(
+                MessageBox,
+                "No BISS keys found for this channel",
+                MessageBox.TYPE_INFO,
+                3
+            )
+            self.close()
+            return
+
         self["list"].setList(items)
 
     def ok(self):
@@ -107,7 +128,7 @@ class EasyBissInput(Screen):
         self.key = list("0000000000000000")
         self.pos = 0
 
-        # ظƒظ„ ظ‚ظٹظ… HEX
+        # All HEX characters
         self.allchars = list("0123456789ABCDEF")
 
         if key_line:
@@ -133,10 +154,8 @@ class EasyBissInput(Screen):
 
     def load_from_line(self):
         parts = self.key_line.split()
-        if len(parts) >= 4:
-            key = parts[3]
-            if len(key) == 16:
-                self.key = list(key)
+        if len(parts) >= 4 and len(parts[3]) == 16:
+            self.key = list(parts[3])
 
     def refresh(self):
         res = "".join(
@@ -152,11 +171,8 @@ class EasyBissInput(Screen):
         self.pos = (self.pos + 1) % 16
         self.refresh()
 
-    # ===== ط§ظ„طھط¹ط¯ظٹظ„ ظ‡ظ†ط§ =====
     def up(self):
         cur = self.key[self.pos]
-        if cur not in self.allchars:
-            cur = "0"
         self.key[self.pos] = self.allchars[
             (self.allchars.index(cur) + 1) % len(self.allchars)
         ]
@@ -164,13 +180,10 @@ class EasyBissInput(Screen):
 
     def down(self):
         cur = self.key[self.pos]
-        if cur not in self.allchars:
-            cur = "F"
         self.key[self.pos] = self.allchars[
             (self.allchars.index(cur) - 1) % len(self.allchars)
         ]
         self.right()
-    # ======================
 
     def set_num(self, c):
         self.key[self.pos] = c
@@ -190,13 +203,13 @@ class EasyBissInput(Screen):
         lines = []
         if os.path.exists(BISS_FILE):
             with open(BISS_FILE, "r") as f:
-                lines = [l.strip() for l in f]
+                lines = [l.rstrip("\n") for l in f]
 
         with open(BISS_FILE, "w") as f:
             for l in lines:
-                if self.mode == "edit" and self.key_line and l == self.key_line:
+                if self.mode == "edit" and self.key_line and l.strip() == self.key_line.strip():
                     continue
-                if l:
+                if l.strip():
                     f.write(l + "\n")
             f.write(new_line + "\n")
 
@@ -224,6 +237,7 @@ class BISSPro(Screen):
             ("Delete Key", "delete", "delete.png"),
             ("Update SoftCam", "update", "update.png"),
         ]
+
         self.menu_list = []
         for t, a, i in self.menu_items:
             pix = LoadPixmap(ICON_PATH + i)
@@ -235,6 +249,7 @@ class BISSPro(Screen):
                         pos=(160, 50), size=(760, 60), font=0, text=t)
                 ])
             )
+
         self["menu"] = MenuList(self.menu_list)
         self["menu"].l.setFont(0, gFont("Regular", 32))
         self["actions"] = ActionMap(
@@ -251,21 +266,25 @@ class BISSPro(Screen):
         sel = self["menu"].getCurrent()
         if not sel:
             return
+
         action = sel[0]
         service = self.session.nav.getCurrentService()
         if not service:
             return
+
         info = service.info()
         sid = "%08X" % info.getInfo(iServiceInformation.sSID)
         sname = info.getName().replace(' ', '_')
 
         if action == "add":
             self.session.open(EasyBissInput, sid, "add", None, sname)
+
         elif action in ("edit", "delete"):
             self.session.openWithCallback(
                 lambda line: self.handle(action, sid, line, sname),
                 SelectKeyScreen, sid, lambda x: x
             )
+
         elif action == "update":
             create_backup()
             try:
@@ -290,8 +309,10 @@ class BISSPro(Screen):
     def handle(self, action, sid, line, sname):
         if not line:
             return
+
         if action == "edit":
             self.session.open(EasyBissInput, sid, "edit", line, sname)
+
         elif action == "delete":
             self.session.openWithCallback(
                 lambda c: self.delete_confirmed(c, line),
@@ -304,13 +325,20 @@ class BISSPro(Screen):
     def delete_confirmed(self, confirmed, line):
         if not confirmed:
             return
+
         create_backup()
+        removed = False
+
         with open(BISS_FILE, "r") as f:
             lines = f.readlines()
+
         with open(BISS_FILE, "w") as f:
             for l in lines:
-                if l.strip() != line.strip():
-                    f.write(l)
+                if not removed and l.strip() == line.strip():
+                    removed = True
+                    continue
+                f.write(l)
+
         restartSoftcam()
         self.session.open(
             MessageBox,
