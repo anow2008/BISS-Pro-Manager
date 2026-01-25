@@ -16,7 +16,7 @@ try:
 except ImportError:
     from urllib import urlretrieve
 
-PLUGIN_NAME = "BissPro v1.0"   # <<< النسخة ظاهرة هنا
+PLUGIN_NAME = "BissPro v1.0"
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
 ICON_PATH = PLUGIN_PATH + "/icons/"
 
@@ -46,20 +46,35 @@ def create_backup():
         return b
     return None
 
-def restartSoftcam():
+def restartSoftcam(session, force=False):
+    """
+    Restart Softcam only if current channel is encrypted (BISS) or force=True
+    """
     cams = ["oscam", "ncam", "gcam", "revcam", "vicard"]
-    active = None
+    active_cam = None
+    
     for cam in cams:
         if os.system("pgrep -x %s >/dev/null 2>&1" % cam) == 0:
-            active = cam
+            active_cam = cam
             break
+
+    if not force:
+        service = session.nav.getCurrentService()
+        if service:
+            info = service.info()
+            caids = info.getInfoObject(iServiceInformation.sCAIDs)
+            if not caids or 0x2600 not in caids:  # BISS check
+                return False
+
     for cam in cams:
         os.system("killall -9 %s 2>/dev/null" % cam)
     time.sleep(1)
-    cam_to_run = active if active else "oscam"
+
+    cam_to_run = active_cam if active_cam else "oscam"
     path = "/usr/bin/" + cam_to_run
     os.system("%s -b >/dev/null 2>&1 &" % (path if os.path.exists(path) else cam_to_run))
     time.sleep(1)
+    return True
 
 def clean_text(text):
     return ''.join(c for c in text if not unicodedata.category(c).startswith(('So', 'Cs')))
@@ -70,7 +85,7 @@ def get_sid_for_channel(session, channel_name):
     if service:
         info = service.info()
         name = info.getName()
-        if channel_name.lower() in name.lower():
+        if channel_name.lower() in name.lower() or channel_name == "":
             return "%08X" % info.getInfo(iServiceInformation.sSID)
     return "00000000"
 
@@ -121,7 +136,8 @@ def parse_biss_file(session, file_path):
             results.append(line)
     return results
 
-def save_biss_lines(lines):
+# ===== Save / Edit / Delete Keys =====
+def save_biss_lines(session, lines):
     if not lines:
         return 0
     create_backup()
@@ -130,40 +146,17 @@ def save_biss_lines(lines):
         with open(BISS_FILE, "r") as f:
             existing = [l.strip() for l in f if l.strip()]
     added = 0
-    with open(BISS_FILE, "a") as f:
-        for l in lines:
-            if l not in existing:
-                f.write(l + "\n")
-                added += 1
+    for l in lines:
+        if l not in existing:
+            existing.append(l)
+            added += 1
     if added > 0:
-        restartSoftcam()
+        with open(BISS_FILE, "w") as f:
+            f.write("\n".join(existing) + "\n")
+        restartSoftcam(session)
     return added
 
-def fetch_biss_txt():
-    try:
-        urlretrieve(GITHUB_BISS_URL, TMP_BISS_TXT)
-        return os.path.exists(TMP_BISS_TXT)
-    except:
-        return False
-
-def fetch_update_softcam():
-    try:
-        urlretrieve(UPDATE_URL, "/tmp/SoftCam.Key")
-        if os.path.exists("/tmp/SoftCam.Key"):
-            create_backup()
-            shutil.copy("/tmp/SoftCam.Key", BISS_FILE)
-            restartSoftcam()
-            return True
-    except:
-        return False
-    return False
-
-def auto_add_keys(session, file_path):
-    lines = parse_biss_file(session, file_path)
-    return save_biss_lines(lines)
-
-# ===== New Utilities: Edit/Delete =====
-def delete_key(sid=None, channel_name=None):
+def delete_key(session, sid=None, channel_name=None):
     if not os.path.exists(BISS_FILE):
         return 0
     create_backup()
@@ -179,13 +172,13 @@ def delete_key(sid=None, channel_name=None):
             removed += 1
             continue
         new_lines.append(line)
-    with open(BISS_FILE, "w") as f:
-        f.write("\n".join(new_lines) + "\n")
     if removed > 0:
-        restartSoftcam()
+        with open(BISS_FILE, "w") as f:
+            f.write("\n".join(new_lines) + "\n")
+        restartSoftcam(session)
     return removed
 
-def edit_key(sid, new_key):
+def edit_key(session, sid, new_key):
     if not os.path.exists(BISS_FILE):
         return False
     create_backup()
@@ -203,8 +196,64 @@ def edit_key(sid, new_key):
     if updated:
         with open(BISS_FILE, "w") as f:
             f.write("\n".join(lines) + "\n")
-        restartSoftcam()
+        restartSoftcam(session)
     return updated
+
+# ===== Fetch / Update =====
+def fetch_biss_txt():
+    try:
+        urlretrieve(GITHUB_BISS_URL, TMP_BISS_TXT)
+        return os.path.exists(TMP_BISS_TXT)
+    except:
+        return False
+
+def fetch_update_softcam():
+    try:
+        urlretrieve(UPDATE_URL, "/tmp/SoftCam.Key")
+        if os.path.exists("/tmp/SoftCam.Key"):
+            create_backup()
+            shutil.copy("/tmp/SoftCam.Key", BISS_FILE)
+            # force restart
+            restartSoftcam(session=None, force=True)
+            return True
+    except:
+        return False
+    return False
+
+def auto_add_keys(session, file_path):
+    lines = parse_biss_file(session, file_path)
+    return save_biss_lines(session, lines)
+
+def auto_add_keys_live(session):
+    """
+    Fetch biss.txt, parse keys, add intelligently:
+    - Only restart Softcam if current channel needs updated key (BISS)
+    """
+    if not fetch_biss_txt():
+        return 0, "Failed to fetch biss.txt!"
+    lines = parse_biss_file(session, TMP_BISS_TXT)
+    if not lines:
+        return 0, "No keys matched current channel!"
+    existing = []
+    if os.path.exists(BISS_FILE):
+        with open(BISS_FILE, "r") as f:
+            existing = [l.strip() for l in f if l.strip()]
+    added = 0
+    need_restart = False
+    for l in lines:
+        if l not in existing:
+            current_sid = get_sid_for_channel(session, "")
+            if current_sid in l:
+                need_restart = True
+            existing.append(l)
+            added += 1
+    if added > 0:
+        create_backup()
+        with open(BISS_FILE, "w") as f:
+            f.write("\n".join(existing) + "\n")
+    if need_restart:
+        restartSoftcam(session)
+    return added, f"{added} key(s) added successfully!" if added else "No keys matched current channel!"
 
 # ===== Screens =====
 class PasteBissScreen(Screen):
@@ -221,7 +270,6 @@ class PasteBissScreen(Screen):
             "ok": self.process,
             "cancel": self.close
         }, -1)
-
     def process(self):
         data = self["input"].getText()
         tmp_path = "/tmp/biss_paste.txt"
@@ -234,57 +282,7 @@ class PasteBissScreen(Screen):
             self.session.open(MessageBox, "No keys matched current channel!", MessageBox.TYPE_INFO, 3)
         self.close()
 
-class EditKeyScreen(Screen):
-    skin = """
-    <screen position="center,center" size="820,300" title="Edit Key">
-        <widget name="sid" position="20,50" size="780,50" font="Regular;24" />
-        <widget name="key" position="20,120" size="780,50" font="Regular;24" />
-    </screen>
-    """
-    def __init__(self, session):
-        Screen.__init__(self, session)
-        from Components.Input import Input
-        self["sid"] = Input("", False)
-        self["key"] = Input("", False)
-        self["actions"] = ActionMap(["OkCancelActions"], {
-            "ok": self.process,
-            "cancel": self.close
-        }, -1)
-
-    def process(self):
-        sid = self["sid"].getText().strip()
-        new_key = self["key"].getText().strip().upper()
-        if edit_key(sid, new_key):
-            self.session.open(MessageBox, "Key updated successfully!", MessageBox.TYPE_INFO, 3)
-        else:
-            self.session.open(MessageBox, "Key not found!", MessageBox.TYPE_ERROR, 3)
-        self.close()
-
-class DeleteKeyScreen(Screen):
-    skin = """
-    <screen position="center,center" size="820,300" title="Delete Key">
-        <widget name="input" position="20,50" size="780,50" font="Regular;24" />
-    </screen>
-    """
-    def __init__(self, session):
-        Screen.__init__(self, session)
-        from Components.Input import Input
-        self["input"] = Input("", False)
-        self["actions"] = ActionMap(["OkCancelActions"], {
-            "ok": self.process,
-            "cancel": self.close
-        }, -1)
-
-    def process(self):
-        value = self["input"].getText().strip()
-        removed = delete_key(sid=value) or delete_key(channel_name=value)
-        if removed > 0:
-            self.session.open(MessageBox, f"{removed} key(s) deleted!", MessageBox.TYPE_INFO, 3)
-        else:
-            self.session.open(MessageBox, "Key not found!", MessageBox.TYPE_ERROR, 3)
-        self.close()
-
-# ===== Main Menu Screen =====
+# ===== Main Menu =====
 class BISSPro(Screen):
     skin = """
     <screen position="center,center" size="1024,768" title="BissPro v1.0">
@@ -317,7 +315,6 @@ class BISSPro(Screen):
             "up": self["menu"].up,
             "down": self["menu"].down
         }, -1)
-
     def ok(self):
         sel = self["menu"].getCurrent()
         if not sel:
@@ -326,8 +323,48 @@ class BISSPro(Screen):
         if action == "add":
             self.session.open(PasteBissScreen)
         elif action == "edit":
+            from Components.Input import Input
+            class EditKeyScreen(Screen):
+                skin = """
+                <screen position="center,center" size="820,300" title="Edit Key">
+                    <widget name="sid" position="20,50" size="780,50" font="Regular;24" />
+                    <widget name="key" position="20,120" size="780,50" font="Regular;24" />
+                </screen>
+                """
+                def __init__(self, session):
+                    Screen.__init__(self, session)
+                    self["sid"] = Input("", False)
+                    self["key"] = Input("", False)
+                    self["actions"] = ActionMap(["OkCancelActions"], {"ok": self.process, "cancel": self.close}, -1)
+                def process(self):
+                    sid = self["sid"].getText().strip()
+                    new_key = self["key"].getText().strip().upper()
+                    if edit_key(self.session, sid, new_key):
+                        self.session.open(MessageBox, "Key updated successfully!", MessageBox.TYPE_INFO, 3)
+                    else:
+                        self.session.open(MessageBox, "Key not found!", MessageBox.TYPE_ERROR, 3)
+                    self.close()
             self.session.open(EditKeyScreen)
         elif action == "delete":
+            from Components.Input import Input
+            class DeleteKeyScreen(Screen):
+                skin = """
+                <screen position="center,center" size="820,300" title="Delete Key">
+                    <widget name="input" position="20,50" size="780,50" font="Regular;24" />
+                </screen>
+                """
+                def __init__(self, session):
+                    Screen.__init__(self, session)
+                    self["input"] = Input("", False)
+                    self["actions"] = ActionMap(["OkCancelActions"], {"ok": self.process, "cancel": self.close}, -1)
+                def process(self):
+                    value = self["input"].getText().strip()
+                    removed = delete_key(self.session, sid=value) or delete_key(self.session, channel_name=value)
+                    if removed > 0:
+                        self.session.open(MessageBox, f"{removed} key(s) deleted!", MessageBox.TYPE_INFO, 3)
+                    else:
+                        self.session.open(MessageBox, "Key not found!", MessageBox.TYPE_ERROR, 3)
+                    self.close()
             self.session.open(DeleteKeyScreen)
         elif action == "update":
             if fetch_update_softcam():
@@ -335,14 +372,8 @@ class BISSPro(Screen):
             else:
                 self.session.open(MessageBox, "Update failed!", MessageBox.TYPE_ERROR, 3)
         elif action == "auto":
-            if fetch_biss_txt():
-                added = auto_add_keys(self.session, TMP_BISS_TXT)
-                if added > 0:
-                    self.session.open(MessageBox, f"{added} keys added successfully!", MessageBox.TYPE_INFO, 3)
-                else:
-                    self.session.open(MessageBox, "No keys matched current channel!", MessageBox.TYPE_INFO, 3)
-            else:
-                self.session.open(MessageBox, "Failed to fetch biss.txt!", MessageBox.TYPE_ERROR, 3)
+            added, msg = auto_add_keys_live(self.session)
+            self.session.open(MessageBox, msg, MessageBox.TYPE_INFO if added else MessageBox.TYPE_INFO, 3)
 
 # ===== Plugin =====
 def main(session, **kwargs):
