@@ -240,18 +240,29 @@ class BISSPro(Screen):
 
     def __init__(self, session):
         Screen.__init__(self, session)
+
+        # قائمة الخيارات مع اسم الأيقونة لكل خيار
         items = [
-            ("Add Key", "add"),
-            ("Edit Key", "edit"),
-            ("Delete Key", "delete"),
-            ("Auto Add Key (Live)", "auto"),
-            ("Update SoftCam.Key", "update")
+            ("Add Key", "add", ICON_PATH + "add.png"),
+            ("Edit Key", "edit", ICON_PATH + "edit.png"),
+            ("Delete Key", "delete", ICON_PATH + "delete.png"),
+            ("Auto Add Key (Live)", "auto", ICON_PATH + "auto.png"),
+            ("Update SoftCam.Key", "update", ICON_PATH + "update.png")
         ]
+
         self.list = []
-        for t, a in items:
-            self.list.append((a, [MultiContentEntryText(pos=(50,40), size=(800,60), font=0, text=t)]))
+        for text, action, icon in items:
+            # تحقق إذا كانت الأيقونة موجودة
+            pix = LoadPixmap(icon) if os.path.exists(icon) else None
+            self.list.append((
+                action,
+                [MultiContentEntryText(pos=(120, 40), size=(800, 60), font=0, text=text, flags=0),
+                 (pix, 20, 20, 80, 80) if pix else None]  # نعرض الأيقونة على يسار النص
+            ))
+
         self["menu"] = MenuList(self.list)
         self["menu"].l.setFont(0, gFont("Regular", 32))
+
         self["actions"] = ActionMap(["OkCancelActions"], {
             "ok": self.ok,
             "cancel": self.close
