@@ -263,7 +263,7 @@ class BISSPro(Screen):
             self.session.open(PasteBissScreen)
         elif a == "edit":
             self.session.openWithCallback(
-                lambda x: edit_key(self.session, *x),
+                lambda x: edit_key(self.session, *x.split(maxsplit=1)),
                 InputBox, title="SID then KEY"
             )
         elif a == "delete":
