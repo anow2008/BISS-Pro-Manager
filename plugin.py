@@ -5,7 +5,7 @@ from Screens.MessageBox import MessageBox
 from Screens.InputBox import InputBox
 from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
-from Components.MultiContent import MultiContentEntryPixmapAlphaTest, MultiContentEntryText
+from Components.MultiContent import MultiContentEntryText
 from enigma import iServiceInformation, gFont
 from Tools.LoadPixmap import LoadPixmap
 import os, time, shutil
@@ -14,7 +14,7 @@ import re, unicodedata
 
 from twisted.web.client import downloadPage
 
-PLUGIN_NAME = "BissPro v1.0"
+PLUGIN_NAME = "BissPro v1.1"
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
 ICON_PATH = PLUGIN_PATH + "/icons/"
 
@@ -35,6 +35,7 @@ def get_key_path():
 
 BISS_FILE = get_key_path()
 TMP_BISS_TXT = "/tmp/biss.txt"
+TMP_UPDATE_FILE = "/tmp/SoftCam.Key"
 
 # ===== Utilities =====
 def create_backup():
@@ -164,11 +165,9 @@ def edit_key(session, sid=None, new_key=None):
     with open(BISS_FILE) as f:
         lines = [l.strip() for l in f if l.strip()]
     
-    # إذا لم يتم إدخال SID، حاول استخراج SID تلقائيًا
     if not sid:
-        sid = get_sid_for_channel(session, "")  # تمرير سلسلة فارغة للحصول على SID للقناة الحالية
+        sid = get_sid_for_channel(session, "")
     
-    # إذا تم إدخال SID ولم يتم العثور عليه في الملف، سنعيد False
     if not sid:
         return False
 
@@ -194,6 +193,18 @@ def auto_add_keys_live(session, done):
         added = save_biss_lines(session, parse_biss_file(session, TMP_BISS_TXT))
         done(added, f"{added} key(s) added!" if added else "No keys matched!")
     fetch_biss_txt(ok, lambda: done(0, "Download failed!"))
+
+def update_softcam_key(cb, eb):
+    d = downloadPage(UPDATE_URL.encode("utf-8"), TMP_UPDATE_FILE)
+    def on_success(_):
+        create_backup()
+        shutil.copy(TMP_UPDATE_FILE, BISS_FILE)
+        restartSoftcam(None, force=True)
+        cb("Update successful!")
+    def on_error(err):
+        eb("Update failed!")
+    d.addCallback(on_success)
+    d.addErrback(on_error)
 
 # ===== Screens =====
 from Components.Input import Input
@@ -222,7 +233,7 @@ class PasteBissScreen(Screen):
 
 class BISSPro(Screen):
     skin = """
-    <screen position="center,center" size="1024,768" title="BissPro v1.0">
+    <screen position="center,center" size="1024,768" title="BissPro v1.1">
         <widget name="menu" position="40,100" size="940,540" itemHeight="120"/>
     </screen>
     """
@@ -233,7 +244,8 @@ class BISSPro(Screen):
             ("Add Key", "add"),
             ("Edit Key", "edit"),
             ("Delete Key", "delete"),
-            ("Auto Add Key (Live)", "auto")
+            ("Auto Add Key (Live)", "auto"),
+            ("Update SoftCam.Key", "update")
         ]
         self.list = []
         for t, a in items:
@@ -264,6 +276,11 @@ class BISSPro(Screen):
                 self.session,
                 lambda a, m: self.session.open(MessageBox, m, MessageBox.TYPE_INFO, 3)
             )
+        elif a == "update":
+            update_softcam_key(
+                lambda msg: self.session.open(MessageBox, msg, MessageBox.TYPE_INFO, 3),
+                lambda msg: self.session.open(MessageBox, msg, MessageBox.TYPE_ERROR, 3)
+            )
 
 # ===== Plugin =====
 def main(session, **kwargs):
@@ -272,7 +289,7 @@ def main(session, **kwargs):
 def Plugins(**kwargs):
     return [PluginDescriptor(
         name=PLUGIN_NAME,
-        description="Professional BISS Manager v1.0 (Add/Edit/Delete Keys)",
+        description="Professional BISS Manager v1.1 (Add/Edit/Delete Keys + Auto Update)",
         where=PluginDescriptor.WHERE_PLUGINMENU,
         fnc=main
     )]
