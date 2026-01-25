@@ -157,12 +157,21 @@ def delete_key(session, value):
         restartSoftcam(session)
     return removed
 
-def edit_key(session, sid, new_key):
+def edit_key(session, sid=None, new_key=None):
     if not os.path.exists(BISS_FILE):
         return False
     create_backup()
     with open(BISS_FILE) as f:
         lines = [l.strip() for l in f if l.strip()]
+    
+    # إذا لم يتم إدخال SID، حاول استخراج SID تلقائيًا
+    if not sid:
+        sid = get_sid_for_channel(session, "")  # تمرير سلسلة فارغة للحصول على SID للقناة الحالية
+    
+    # إذا تم إدخال SID ولم يتم العثور عليه في الملف، سنعيد False
+    if not sid:
+        return False
+
     for i, l in enumerate(lines):
         if sid in l:
             p = l.split()
