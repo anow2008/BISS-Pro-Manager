@@ -210,9 +210,11 @@ def update_softcam_key(cb, eb):
 from Components.Input import Input
 
 class PasteBissScreen(Screen):
+    # واجهة إدخال المفتاح يدوياً - أبعاد مرنة
     skin = """
-    <screen position="center,center" size="800,300" title="Paste BISS">
-        <widget name="input" position="20,20" size="760,260" font="Regular;24"/>
+    <screen position="center,center" size="900,400" title="Paste BISS Data" backgroundColor="#101010">
+        <widget name="input" position="20,20" size="860,300" font="Regular;26" foregroundColor="#ffffff" backgroundColor="#202020" scrollbarMode="showOnDemand"/>
+        <eLabel text="Press OK to Save, Cancel to Exit" position="20,340" size="860,40" font="Regular;22" halign="center" foregroundColor="#aaaaaa" transparent="1" />
     </screen>
     """
     def __init__(self, session):
@@ -232,66 +234,54 @@ class PasteBissScreen(Screen):
         self.close()
 
 class BISSPro(Screen):
+    # الواجهة الرئيسية بتصميم FHD عصري
     skin = """
-    <screen position="center,center" size="1024,768" title="BissPro v1.1">
-        <widget name="menu" position="40,100" size="940,540" itemHeight="120"/>
+    <screen name="BISSPro" position="center,center" size="1000,650" title="BissPro Professional v1.1" backgroundColor="#151515">
+        <eLabel position="0,0" size="1000,80" backgroundColor="#0055ff" zPosition="-1" />
+        <eLabel text="BISS PRO MANAGER" position="120,15" size="800,50" font="Regular;35" foregroundColor="#ffffff" transparent="1" halign="left" />
+        
+        <widget name="menu" position="30,100" size="940,480" 
+                itemHeight="90" 
+                scrollbarMode="showOnDemand" 
+                selectionColor="#333333" 
+                transparent="1" />
+
+        <eLabel position="0,590" size="1000,60" backgroundColor="#222222" zPosition="-1" />
+        <eLabel text="Select an option and press OK" position="30,605" size="940,30" font="Regular;20" foregroundColor="#cccccc" transparent="1" halign="center" />
     </screen>
     """
 
     def __init__(self, session):
         Screen.__init__(self, session)
 
-        # قائمة الخيارات مع اسم الأيقونة لكل خيار
         items = [
-            ("Add Key", "add", ICON_PATH + "add.png"),
-            ("Edit Key", "edit", ICON_PATH + "edit.png"),
-            ("Delete Key", "delete", ICON_PATH + "delete.png"),
-            ("Auto Add Key (Live)", "auto", ICON_PATH + "auto.png"),
-            ("Update SoftCam.Key", "update", ICON_PATH + "update.png")
+            ("Add Key (Manual Paste)", "add", ICON_PATH + "add.png"),
+            ("Edit Current Key", "edit", ICON_PATH + "edit.png"),
+            ("Delete Key (SID/Name)", "delete", ICON_PATH + "delete.png"),
+            ("Auto Grab Key (Live)", "auto", ICON_PATH + "auto.png"),
+            ("Update SoftCam.Key File", "update", ICON_PATH + "update.png")
         ]
 
         self.list = []
         for text, action, icon in items:
-            # تحقق إذا كانت الأيقونة موجودة
             pix = LoadPixmap(icon) if os.path.exists(icon) else None
-            self.list.append((
-                action,
-                [MultiContentEntryText(pos=(120, 40), size=(800, 60), font=0, text=text, flags=0),
-                 (pix, 20, 20, 80, 80) if pix else None]  # نعرض الأيقونة على يسار النص
-            ))
+            # MultiContentEntryText بتنسيق أفضل للأيقونة والنص
+            res = [action]
+            res.append(MultiContentEntryText(pos=(110, 25), size=(800, 50), font=0, text=text, flags=0, color=0xffffff))
+            if pix:
+                # وضع الأيقونة في المنتصف رأسياً بجانب النص
+                res.append((pix, 25, 15, 60, 60)) 
+            self.list.append(res)
 
         self["menu"] = MenuList(self.list)
-        self["menu"].l.setFont(0, gFont("Regular", 32))
+        # ضبط الخط ليناسب الأبعاد الجديدة
+        self["menu"].l.setFont(0, gFont("Regular", 30))
+        self["menu"].l.setItemHeight(90)
 
         self["actions"] = ActionMap(["OkCancelActions"], {
             "ok": self.ok,
             "cancel": self.close
         }, -1)
-
-    def ok(self):
-        a = self["menu"].getCurrent()[0]
-        if a == "add":
-            self.session.open(PasteBissScreen)
-        elif a == "edit":
-            self.session.openWithCallback(
-                lambda x: edit_key(self.session, *x.split(maxsplit=1)),
-                InputBox, title="SID then KEY"
-            )
-        elif a == "delete":
-            self.session.openWithCallback(
-                lambda x: delete_key(self.session, x),
-                InputBox, title="SID or Channel"
-            )
-        elif a == "auto":
-            auto_add_keys_live(
-                self.session,
-                lambda a, m: self.session.open(MessageBox, m, MessageBox.TYPE_INFO, 3)
-            )
-        elif a == "update":
-            update_softcam_key(
-                lambda msg: self.session.open(MessageBox, msg, MessageBox.TYPE_INFO, 3),
-                lambda msg: self.session.open(MessageBox, msg, MessageBox.TYPE_ERROR, 3)
-            )
 
 # ===== Plugin =====
 def main(session, **kwargs):
