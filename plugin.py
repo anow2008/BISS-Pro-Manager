@@ -283,6 +283,31 @@ class BISSPro(Screen):
             "cancel": self.close
         }, -1)
 
+    def ok(self):
+        a = self["menu"].getCurrent()[0]
+        if a == "add":
+            self.session.open(PasteBissScreen)
+        elif a == "edit":
+            self.session.openWithCallback(
+                lambda x: edit_key(self.session, *x.split(maxsplit=1)),
+                InputBox, title="SID then KEY"
+            )
+        elif a == "delete":
+            self.session.openWithCallback(
+                lambda x: delete_key(self.session, x),
+                InputBox, title="SID or Channel"
+            )
+        elif a == "auto":
+            auto_add_keys_live(
+                self.session,
+                lambda a, m: self.session.open(MessageBox, m, MessageBox.TYPE_INFO, 3)
+            )
+        elif a == "update":
+            update_softcam_key(
+                lambda msg: self.session.open(MessageBox, msg, MessageBox.TYPE_INFO, 3),
+                lambda msg: self.session.open(MessageBox, msg, MessageBox.TYPE_ERROR, 3)
+            )
+
 # ===== Plugin =====
 def main(session, **kwargs):
     session.open(BISSPro)
