@@ -12,14 +12,20 @@ import os, time, shutil
 from datetime import datetime
 
 try:
-    from urllib.request import urlretrieve
+    from urllib.request import urlopen
 except ImportError:
-    from urllib import urlretrieve
+    from urllib2 import urlopen
+
 
 PLUGIN_NAME = "BissPro"
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
 ICON_PATH = PLUGIN_PATH + "/icons/"
+
 UPDATE_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
+BISS_TXT_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt"
+
+TMP_BISS = "/tmp/biss.txt"
+BISS_CACHE_TIME = 10 * 60  # 10 minutes
 
 def get_key_path():
     paths = [
@@ -42,7 +48,6 @@ def create_backup():
         return b
     return None
 
-# Restart softcam safely
 def restartSoftcam():
     cams = ["oscam", "ncam", "gcam", "revcam", "vicard"]
     active = None
@@ -66,6 +71,92 @@ def restartSoftcam():
     path = "/usr/bin/" + cam_to_run
     os.system("%s -b >/dev/null 2>&1 &" % (path if os.path.exists(path) else cam_to_run))
     time.sleep(1)
+
+def normalize(text):
+    return ''.join(c for c in text.upper() if c.isalnum())
+
+def get_biss_data():
+    if os.path.exists(TMP_BISS):
+        if time.time() - os.path.getmtime(TMP_BISS) < BISS_CACHE_TIME:
+            with open(TMP_BISS, "r") as f:
+                return f.read().upper()
+
+    try:
+        data = urlopen(BISS_TXT_URL, timeout=10).read()
+        if isinstance(data, bytes):
+            data = data.decode("utf-8", errors="ignore")
+        data = data.upper()
+        with open(TMP_BISS, "w") as f:
+            f.write(data)
+        return data
+    except Exception as e:
+        return None
+
+def import_biss_from_github(service):
+    try:
+        info = service.info()
+        sid = info.getInfo(iServiceInformation.sSID)
+        if sid is None:
+            return False, "SID not found"
+        sid = "%08X" % sid
+
+        cur_name = normalize(info.getName())
+
+        transponder = info.getInfoObject(iServiceInformation.sTransponderData)
+        if not transponder:
+            return False, "No transponder info"
+
+        freq = str(transponder.get("frequency", ""))[:5]
+        pol = {0: "H", 1: "V", 2: "L", 3: "R"}.get(
+            transponder.get("polarization", -1), ""
+        )
+
+        data = get_biss_data()
+        if not data:
+            return False, "Failed to download biss.txt"
+
+        # Parse biss.txt
+        lines = [l.strip() for l in data.splitlines() if l.strip()]
+        blocks = []
+        i = 0
+        while i < len(lines):
+            if "E" in lines[i] and len(lines[i]) <= 5:  # check satellite line
+                if i + 3 < len(lines):
+                    blocks.append(lines[i:i + 4])
+                i += 4
+            else:
+                i += 1
+
+        found = None
+        for b in blocks:
+            b_name = normalize(b[1])
+            b_freq_line = b[2].split()
+            b_freq = b_freq_line[0] if len(b_freq_line) > 0 else ""
+            b_pol = b_freq_line[1] if len(b_freq_line) > 1 else ""
+
+            if b_name == cur_name and b_freq == freq and b_pol == pol:
+                found = b[3].replace(" ", "")
+                break
+
+        if not found:
+            return False, "No matching key found"
+
+        new_line = "F %s 00000000 %s ;%s" % (sid, found, cur_name)
+
+        if os.path.exists(BISS_FILE):
+            with open(BISS_FILE, "r") as f:
+                if any(l.strip() == new_line.strip() for l in f):
+                    return False, "Key already exists"
+
+        create_backup()
+        with open(BISS_FILE, "a") as f:
+            f.write(new_line + "\n")
+
+        restartSoftcam()
+        return True, "Key added successfully"
+
+    except Exception as e:
+        return False, "Error: %s" % str(e)
 
 class SelectKeyScreen(Screen):
     skin = """
@@ -128,7 +219,6 @@ class EasyBissInput(Screen):
         self.key = list("0000000000000000")
         self.pos = 0
 
-        # All HEX characters
         self.allchars = list("0123456789ABCDEF")
 
         if key_line:
@@ -205,6 +295,15 @@ class EasyBissInput(Screen):
             with open(BISS_FILE, "r") as f:
                 lines = [l.rstrip("\n") for l in f]
 
+        if new_line.strip() in [l.strip() for l in lines]:
+            self.session.open(
+                MessageBox,
+                "Key already exists",
+                MessageBox.TYPE_INFO,
+                3
+            )
+            return
+
         with open(BISS_FILE, "w") as f:
             for l in lines:
                 if self.mode == "edit" and self.key_line and l.strip() == self.key_line.strip():
@@ -236,6 +335,7 @@ class BISSPro(Screen):
             ("Edit Key", "edit", "edit.png"),
             ("Delete Key", "delete", "delete.png"),
             ("Update SoftCam", "update", "update.png"),
+            ("Auto Add", "auto_add", "auto_add.png"),
         ]
 
         self.menu_list = []
@@ -305,6 +405,15 @@ class BISSPro(Screen):
                     MessageBox.TYPE_ERROR,
                     3
                 )
+
+        elif action == "auto_add":
+            ok, msg = import_biss_from_github(service)
+            self.session.open(
+                MessageBox,
+                msg,
+                MessageBox.TYPE_INFO if ok else MessageBox.TYPE_ERROR,
+                3
+            )
 
     def handle(self, action, sid, line, sname):
         if not line:
