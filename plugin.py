@@ -11,12 +11,7 @@ from Tools.LoadPixmap import LoadPixmap
 from threading import Thread
 import os, time, shutil
 from datetime import datetime
-
-try:
-    from urllib.request import urlopen, urlretrieve
-except ImportError:
-    from urllib2 import urlopen
-    from urllib import urlretrieve
+import re
 
 PLUGIN_NAME = "BissPro"
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
@@ -86,6 +81,11 @@ def get_biss_data():
     except:
         return None
 
+def clean_biss_key(key):
+    # إزالة المسافات والرموز غير السداسية عشرية
+    cleaned_key = re.sub(r'[^0-9A-F]', '', key.upper())
+    return cleaned_key
+
 def import_biss_from_github(service):
     try:
         info = service.info()
@@ -122,11 +122,18 @@ def import_biss_from_github(service):
                 break
         if not found:
             return False, "No matching key found"
-        new_line = "F %s 00000000 %s ;%s" % (sid, found, cur_name)
+
+        # تنظيف المفتاح BISS من المسافات والرموز الغير سداسية عشرية
+        found = clean_biss_key(found)
+
+        # إنشاء السطر مع اسم القناة في النهاية
+        new_line = "F %08X 00000000 %s ;%s" % (int(sid, 16), found, cur_name)
+        
         if os.path.exists(BISS_FILE):
             with open(BISS_FILE, "r", encoding="utf-8", errors="ignore") as f:
                 if any(l.strip() == new_line.strip() for l in f):
                     return False, "Key already exists"
+        
         create_backup()
         with open(BISS_FILE, "a", encoding="utf-8") as f:
             f.write(new_line + "\n")
