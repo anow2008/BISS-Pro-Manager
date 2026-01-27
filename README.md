@@ -1,4 +1,4 @@
-BissPro v1.0 - بلجن Enigma2 لإدارة مفاتيح BISS
+BissPro v1.1 - بلجن Enigma2 لإدارة مفاتيح BISS
 # مميزات:
 # • إضافة مفتاح BISS للقناة الحالية
 # • إدخال HEX 0-9 / A-F
