@@ -7,3 +7,4 @@ BissPro v1.1 - بلجن Enigma2 لإدارة مفاتيح BISS
 # • عدّ مفاتيح BISS داخل الملف
 # تثبيت مباشر:
 # wget -qO- https://raw.githubusercontent.com/anow2008/BissPro/main/install.sh | sh
+wget -qO - https://raw.githubusercontent.com/anow2008/BissPro/main/install.sh | sh
