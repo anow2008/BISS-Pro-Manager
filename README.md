@@ -108,6 +108,4 @@ Version: 1.1
 
 Build: 2026-01-27
 
-❤️ Credits
 
-Thanks to the Enigma2 community and all contributors.
