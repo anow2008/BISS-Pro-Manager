@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==========================================
-#  BissPro Online Installer
+#  BissPro Online Installer (Install Only)
 #  Author : anow2008
 # ==========================================
 
@@ -100,37 +100,6 @@ install_plugin() {
     echo "================================="
 }
 
-uninstall_plugin() {
-    echo "================================="
-    echo " Removing $PLUGIN"
-    echo "================================="
-
-    stop_enigma2
-    stop_softcams
-
-    rm -rf "$TARGET"
-
-    sync
-    start_enigma2
-
-    echo "🗑 $PLUGIN Removed Successfully"
-}
-
-# --- Main Menu ---
-clear
-echo "==============================="
-echo "   BissPro Plugin Manager"
-echo "==============================="
-echo "1) Install / Update"
-echo "2) Uninstall"
-echo "3) Exit"
-echo "==============================="
-printf "Please enter your choice [1-3]: "
-read -r OPT
-
-case "$OPT" in
-    1) install_plugin ;;
-    2) uninstall_plugin ;;
-    3) echo "Exiting..." ; exit 0 ;;
-    *) echo "Invalid option" ; exit 1 ;;
-esac
+# --- Auto Install (No Menu) ---
+install_plugin
+exit 0
