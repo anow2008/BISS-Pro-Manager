@@ -38,9 +38,9 @@ It supports manual and automatic key handling, online updates, backups, and mult
 wget -qO - https://raw.githubusercontent.com/anow2008/BissPro/main/install.sh | sh
 
 ---
-uninstall
-
+## Uninstall
 wget -qO - https://raw.githubusercontent.com/anow2008/BissPro/main/uninstall.sh | sh
+
 
 ⚙️ Settings Overview
 
