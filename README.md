@@ -38,9 +38,6 @@ It supports manual and automatic key handling, online updates, backups, and mult
 wget -qO - https://raw.githubusercontent.com/anow2008/BissPro/main/install.sh | sh
 
 ---
-## Uninstall
-wget -qO - https://raw.githubusercontent.com/anow2008/BissPro/main/uninstall.sh | sh
-
 
 ⚙️ Settings Overview
 
@@ -101,6 +98,14 @@ Stored in the same directory as SoftCam.Key
 
 This plugin is provided for educational and personal use only.
 The author is not responsible for any misuse.
+
+## Uninstall
+wget -qO - https://raw.githubusercontent.com/anow2008/BissPro/main/uninstall.sh | sh
+
+or
+
+rm -rf /usr/lib/enigma2/python/Plugins/Extensions/BissPro && killall enigma2
+
 
 👨‍💻 Author
 
