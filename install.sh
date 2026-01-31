@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==========================================
-#  BissPro Online Installer (Install Only)
+#  BissPro Online Installer (Improved)
 #  Author : anow2008
 # ==========================================
 
@@ -8,6 +8,9 @@ PLUGIN="BissPro"
 BASE_DIR="/usr/lib/enigma2/python/Plugins/Extensions"
 TARGET="$BASE_DIR/$PLUGIN"
 REPO="https://github.com/anow2008/BissPro.git"
+LOG="/tmp/bisspro_install.log"
+
+echo "🔧 BissPro Installer Started" | tee $LOG
 
 # --- Detect Python ---
 if command -v python3 >/dev/null 2>&1; then
@@ -16,9 +19,8 @@ else
     PYTHON=python
 fi
 
-# --- Functions ---
 stop_enigma2() {
-    echo "⏹ Stopping Enigma2..."
+    echo "⏹ Stopping Enigma2..." | tee -a $LOG
     if command -v systemctl >/dev/null 2>&1; then
         systemctl stop enigma2
     else
@@ -28,7 +30,7 @@ stop_enigma2() {
 }
 
 start_enigma2() {
-    echo "▶ Starting Enigma2..."
+    echo "▶ Starting Enigma2..." | tee -a $LOG
     if command -v systemctl >/dev/null 2>&1; then
         systemctl start enigma2
     else
@@ -36,70 +38,54 @@ start_enigma2() {
     fi
 }
 
-stop_softcams() {
-    echo "⏹ Stopping Softcams..."
-    killall oscam ncam gcam cccam 2>/dev/null
-}
-
-restart_softcam() {
-    echo "▶ Restarting Softcam..."
-    [ -x /usr/bin/oscam ] && /usr/bin/oscam -b 2>/dev/null
-}
-
 install_plugin() {
-    echo "================================="
-    echo " Installing $PLUGIN"
-    echo "================================="
+    echo "=================================" | tee -a $LOG
+    echo " Installing $PLUGIN" | tee -a $LOG
+    echo "=================================" | tee -a $LOG
+
+    # --- Ensure git exists ---
+    if ! command -v git >/dev/null 2>&1; then
+        echo "📦 Installing git..." | tee -a $LOG
+        opkg update && opkg install git || {
+            echo "❌ Git install failed" | tee -a $LOG
+            exit 1
+        }
+    fi
 
     stop_enigma2
-    stop_softcams
 
     rm -rf "$TARGET"
     mkdir -p "$BASE_DIR" || exit 1
     cd "$BASE_DIR" || exit 1
 
-    # --- Ensure git exists ---
-    if ! command -v git >/dev/null 2>&1; then
-        echo "📦 Installing git..."
-        opkg update && opkg install git || {
-            echo "❌ Git install failed"
-            start_enigma2
-            exit 1
-        }
-    fi
-
-    echo "⬇ Downloading from GitHub..."
-    git clone "$REPO" "$PLUGIN" || {
-        echo "❌ Git clone failed"
+    echo "⬇ Downloading from GitHub..." | tee -a $LOG
+    if ! git clone "$REPO" "$PLUGIN" >> $LOG 2>&1; then
+        echo "❌ Git clone failed" | tee -a $LOG
         start_enigma2
         exit 1
-    }
+    fi
 
-    # --- Permissions & cleanup ---
+    # --- Verify install ---
+    if [ ! -f "$TARGET/plugin.py" ]; then
+        echo "❌ plugin.py not found! Install failed" | tee -a $LOG
+        start_enigma2
+        exit 1
+    fi
+
     chmod -R 755 "$TARGET"
     find "$TARGET" -name "*.pyc" -delete
 
-    # --- Python syntax check ---
-    if $PYTHON -m py_compile "$TARGET/plugin.py" 2>/dev/null; then
-        echo "✔ plugin.py OK"
-    else
-        echo "⚠ plugin.py check failed"
-    fi
-
-    if [ -f "$TARGET/lang.py" ]; then
-        $PYTHON -m py_compile "$TARGET/lang.py" 2>/dev/null && echo "✔ lang.py OK"
-    fi
+    $PYTHON -m py_compile "$TARGET/plugin.py" 2>/dev/null && \
+        echo "✔ plugin.py OK" | tee -a $LOG
 
     sync
     start_enigma2
-    sleep 5
-    restart_softcam
 
-    echo "================================="
-    echo " ✅ $PLUGIN Installed Successfully"
+    echo "=================================" | tee -a $LOG
+    echo " ✅ $PLUGIN Installed Successfully" | tee -a $LOG
+    echo " 📄 Log: $LOG"
     echo "================================="
 }
 
-# --- Auto Install (No Menu) ---
 install_plugin
 exit 0
