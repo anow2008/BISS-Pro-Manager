@@ -1,13 +1,13 @@
 #!/bin/sh
 # ==========================================
-#  BissPro Online Installer (Improved)
+#  BissPro Online Installer (No Git)
 #  Author : anow2008
 # ==========================================
 
 PLUGIN="BissPro"
 BASE_DIR="/usr/lib/enigma2/python/Plugins/Extensions"
 TARGET="$BASE_DIR/$PLUGIN"
-REPO="https://github.com/anow2008/BissPro.git"
+ZIP_URL="https://github.com/anow2008/BissPro/archive/refs/heads/main.tar.gz"
 LOG="/tmp/bisspro_install.log"
 
 echo "🔧 BissPro Installer Started" | tee $LOG
@@ -39,50 +39,43 @@ start_enigma2() {
 }
 
 install_plugin() {
-    echo "=================================" | tee -a $LOG
-    echo " Installing $PLUGIN" | tee -a $LOG
-    echo "=================================" | tee -a $LOG
-
-    # --- Ensure git exists ---
-    if ! command -v git >/dev/null 2>&1; then
-        echo "📦 Installing git..." | tee -a $LOG
-        opkg update && opkg install git || {
-            echo "❌ Git install failed" | tee -a $LOG
-            exit 1
-        }
-    fi
-
     stop_enigma2
 
+    mkdir -p "$BASE_DIR"
+    cd /tmp || exit 1
+    rm -rf BissPro* main.tar.gz
+
+    echo "⬇ Downloading plugin..." | tee -a $LOG
+    if ! wget -O main.tar.gz "$ZIP_URL" >> $LOG 2>&1; then
+        echo "❌ Download failed" | tee -a $LOG
+        start_enigma2
+        exit 1
+    fi
+
+    echo "📦 Extracting..." | tee -a $LOG
+    tar -xzf main.tar.gz || {
+        echo "❌ Extract failed" | tee -a $LOG
+        start_enigma2
+        exit 1
+    }
+
     rm -rf "$TARGET"
-    mkdir -p "$BASE_DIR" || exit 1
-    cd "$BASE_DIR" || exit 1
-
-    echo "⬇ Downloading from GitHub..." | tee -a $LOG
-    if ! git clone "$REPO" "$PLUGIN" >> $LOG 2>&1; then
-        echo "❌ Git clone failed" | tee -a $LOG
-        start_enigma2
-        exit 1
-    fi
-
-    # --- Verify install ---
-    if [ ! -f "$TARGET/plugin.py" ]; then
-        echo "❌ plugin.py not found! Install failed" | tee -a $LOG
-        start_enigma2
-        exit 1
-    fi
+    mv BissPro-main "$TARGET"
 
     chmod -R 755 "$TARGET"
     find "$TARGET" -name "*.pyc" -delete
 
-    $PYTHON -m py_compile "$TARGET/plugin.py" 2>/dev/null && \
-        echo "✔ plugin.py OK" | tee -a $LOG
+    if [ -f "$TARGET/plugin.py" ]; then
+        $PYTHON -m py_compile "$TARGET/plugin.py" 2>/dev/null
+    else
+        echo "❌ plugin.py missing" | tee -a $LOG
+    fi
 
     sync
     start_enigma2
 
-    echo "=================================" | tee -a $LOG
-    echo " ✅ $PLUGIN Installed Successfully" | tee -a $LOG
+    echo "================================="
+    echo " ✅ BissPro Installed Successfully"
     echo " 📄 Log: $LOG"
     echo "================================="
 }
