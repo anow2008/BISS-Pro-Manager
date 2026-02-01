@@ -13,7 +13,6 @@ from threading import Thread
 from urllib.request import urlopen, urlretrieve
 import os, re, shutil
 
-# البحث عن مسار ملف الشفرات الحقيقي
 def get_softcam_path():
     paths = [
         "/etc/tuxbox/config/oscam/SoftCam.Key",
@@ -23,7 +22,7 @@ def get_softcam_path():
     ]
     for p in paths:
         if os.path.exists(p): return p
-    return "/etc/tuxbox/config/SoftCam.Key"
+    return "/etc/tuxbox/config/oscam/SoftCam.Key"
 
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
 ICON_PATH = os.path.join(PLUGIN_PATH, "icons")
@@ -40,7 +39,7 @@ class BISSPro(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v2.6">
+        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v2.7">
             <widget name="menu" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(1060)},{self.ui.px(550)}" itemHeight="{self.ui.px(110)}" scrollbarMode="showOnDemand" transparent="1"/>
             <eLabel position="{self.ui.px(50)},{self.ui.px(600)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             <widget name="progress" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(15)}" transparent="1" />
@@ -70,22 +69,23 @@ class BISSPro(Screen):
 
     def save_biss_key(self, sid, key, name):
         target = get_softcam_path()
-        sid = sid.upper()
-        key = key.upper()
+        # تنسيق الـ SID ليكون 4 أرقام ستة عشرية (مثلاً 0001 أو 1234)
+        clean_sid = sid.zfill(4).upper()
+        full_sid = f"0000{clean_sid}" if len(clean_sid) <= 4 else clean_sid.zfill(8)
+        
         try:
-            # 1. التأكد من وجود الملف وتصريحه
             if not os.path.exists(target):
                 os.system(f'touch {target}')
             os.system(f'chmod 644 {target}')
 
-            # 2. حذف السطر القديم إذا وجد (بناءً على الـ SID) لتجنب التكرار
-            os.system(f"sed -i '/F {sid}/d' {target}")
+            # حذف أي شفرة قديمة لنفس الـ SID
+            os.system(f"sed -i '/F {full_sid}/d' {target}")
+            os.system(f"sed -i '/F {clean_sid}/d' {target}")
 
-            # 3. إضافة السطر الجديد في نهاية الملف
-            new_entry = f"F {sid} 00000000 {key} ;{name}"
+            # السطر الجديد بالصيغة القياسية
+            new_entry = f"F {full_sid} 00000000 {key.upper()} ;{name}"
             os.system(f'echo "{new_entry}" >> {target}')
             
-            # 4. تحديث الكام
             os.system("killall -HUP oscam ncam >/dev/null 2>&1")
             return True
         except:
@@ -111,11 +111,14 @@ class BISSPro(Screen):
         service = self.session.nav.getCurrentService()
         if not service: return
         info = service.info()
-        sid = "%08X" % info.getInfo(iServiceInformation.sSID)
-        if self.save_biss_key(sid, key, info.getName()):
-            self.res = (True, "Success: Key Saved!")
+        # استخراج الـ SID الحقيقي وتحويله لـ Hex بشكل صحيح
+        raw_sid = info.getInfo(iServiceInformation.sSID)
+        hex_sid = "%04X" % (raw_sid & 0xFFFF)
+        
+        if self.save_biss_key(hex_sid, key, info.getName()):
+            self.res = (True, f"Saved: SID {hex_sid}")
         else:
-            self.res = (False, "Failed to Write File")
+            self.res = (False, "Write Error")
         self.timer.start(100, True)
 
     def do_update(self):
@@ -129,12 +132,17 @@ class BISSPro(Screen):
 
     def do_auto(self, service):
         try:
-            info = service.info(); sid = "%08X" % info.getInfo(iServiceInformation.sSID)
-            raw = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
-            m = re.search(sid + r'.*?([0-9A-Fa-f]{16})', raw, re.I)
-            if m and self.save_biss_key(sid, m.group(1), info.getName()):
-                self.res = (True, f"Key Found: {m.group(1)}")
-            else: self.res = (False, "Not Found Online")
+            info = service.info()
+            raw_sid = info.getInfo(iServiceInformation.sSID)
+            hex_sid = "%04X" % (raw_sid & 0xFFFF)
+            
+            raw_data = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
+            # بحث مرن عن الـ SID في النص
+            m = re.search(hex_sid + r'.*?([0-9A-Fa-f]{16})', raw_data, re.I)
+            if m and self.save_biss_key(hex_sid, m.group(1), info.getName()):
+                self.res = (True, f"Auto Saved: {hex_sid}")
+            else:
+                self.res = (False, f"Not Found: {hex_sid}")
         except: self.res = (False, "Server Error")
         self.timer.start(100, True)
 
@@ -181,4 +189,4 @@ class HexInputScreen(Screen):
         else: self.session.open(MessageBox, "16 digits required!", MessageBox.TYPE_ERROR)
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v2.6", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v2.7", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
