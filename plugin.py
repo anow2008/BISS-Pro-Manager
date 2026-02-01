@@ -91,8 +91,11 @@ def reload_cam_keys():
     return True
 
 def extract_biss_key_from_block(block):
-    raw = re.sub(r'[^0-9A-Fa-f]', '', block[3])
-    return raw[:16].upper() if len(raw) >= 16 else None
+    try:
+        raw = re.sub(r'[^0-9A-Fa-f]', '', block[3])
+        return raw[:16].upper() if len(raw) >= 16 else None
+    except:
+        return None
 
 def write_biss_key(sid, key, name):
     if not ensure_biss_file(): return False
@@ -207,8 +210,10 @@ class BISSPro(Screen):
         if action == "add" and service:
             self.start_manual(service)
         elif action == "upd":
+            self.update_status("Updating SoftCam.Key...")
             Thread(target=self.do_update).start()
         elif action == "auto" and service:
+            self.update_status("Searching BISS key...")
             Thread(target=self.do_auto, args=(service,)).start()
 
     def start_manual(self, service):
@@ -229,7 +234,6 @@ class BISSPro(Screen):
 
     def do_update(self):
         try:
-            self.update_status("Updating SoftCam.Key...")
             urlretrieve(UPDATE_URL, "/tmp/SoftCam.Key")
             shutil.copy("/tmp/SoftCam.Key", BISS_FILE)
             Thread(target=reload_cam_keys).start()
@@ -240,7 +244,6 @@ class BISSPro(Screen):
 
     def do_auto(self, service):
         try:
-            self.update_status("Searching BISS key...")
             info = service.info()
             sid = "%08X" % info.getInfo(iServiceInformation.sSID)
             name = info.getName()
@@ -249,7 +252,7 @@ class BISSPro(Screen):
             found = False
             for i in range(0, len(lines), 4):
                 block = lines[i:i + 4]
-                if len(block) == 4:  # تأكد أن block يحتوي على 4 عناصر
+                if len(block) == 4:  # تأكد من طول الـ block
                     key = extract_biss_key_from_block(block)
                     if key and write_biss_key(sid, key, name):
                         Thread(target=reload_cam_keys).start()
