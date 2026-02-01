@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
 from Screens.MessageBox import MessageBox
@@ -6,11 +7,15 @@ from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
 from Components.ProgressBar import ProgressBar
+from Components.Skin import loadSkin
 from enigma import iServiceInformation
-from Tools.LoadPixmap import LoadPixmap
-import os, time, urllib.request
+import os, time
 
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro/"
+
+# تحميل الـ Skin مرة واحدة
+if os.path.exists(PLUGIN_PATH + "skin.xml"):
+    loadSkin(PLUGIN_PATH + "skin.xml")
 
 # ================= Helpers =================
 def get_key_path():
@@ -39,7 +44,8 @@ def read_keys():
 def find_key_by_sid(sid):
     sid4 = sid[-4:].upper()
     for l in read_keys():
-        if l.split()[1].upper() == sid4:
+        parts = l.split()
+        if len(parts) > 3 and parts[1].upper() == sid4:
             return l
     return None
 
@@ -47,7 +53,6 @@ def find_key_by_sid(sid):
 class EasyBissInput(Screen):
     def __init__(self, session, sid, mode="add", old=None, name="Channel"):
         Screen.__init__(self, session)
-        self.skin = open(PLUGIN_PATH + "skin.xml").read()
 
         self.sid = sid[-4:]
         self.mode = mode
@@ -62,9 +67,8 @@ class EasyBissInput(Screen):
 
         self.labels = []
         for i in range(16):
-            lbl = Label("0")
-            self["k%d" % i] = lbl
-            self.labels.append(lbl)
+            self["k%d" % i] = Label("0")
+            self.labels.append(self["k%d" % i])
 
         self["hexlist"] = MenuList([(c, c) for c in "ABCDEF"])
 
@@ -130,16 +134,17 @@ class EasyBissInput(Screen):
 class BISSPro(Screen):
     def __init__(self, session):
         Screen.__init__(self, session)
-        self.skin = open(PLUGIN_PATH + "skin.xml").read()
 
         self["menu"] = MenuList([
             ("Add BISS Key", "add"),
             ("Edit BISS Key", "edit"),
             ("Delete BISS Key", "delete"),
         ])
+        self["menu"].l.setItemHeight(60)
 
         self["status"] = Label("Ready")
         self["progress"] = ProgressBar()
+        self["progress"].setValue(0)
 
         self["actions"] = ActionMap(
             ["OkCancelActions"],
@@ -162,6 +167,8 @@ class BISSPro(Screen):
             old = find_key_by_sid(sid)
             if old:
                 self.session.open(EasyBissInput, sid, "edit", old, name)
+            else:
+                self.session.open(MessageBox, "No key for this channel", MessageBox.TYPE_INFO, 3)
 
         elif sel == "delete":
             old = find_key_by_sid(sid)
