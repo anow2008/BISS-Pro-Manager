@@ -13,17 +13,12 @@ from threading import Thread
 from urllib.request import urlopen, urlretrieve
 import os, re, shutil
 
-# --- تحديد المسارات بشكل ديناميكي لحل مشكلة الأيقونات ---
+# المسارات الديناميكية
 PLUGIN_PATH = os.path.dirname(__file__)
 ICON_PATH = os.path.join(PLUGIN_PATH, "icons")
 
 def get_softcam_path():
-    paths = [
-        "/etc/tuxbox/config/oscam/SoftCam.Key",
-        "/etc/tuxbox/config/ncam/SoftCam.Key",
-        "/etc/tuxbox/config/SoftCam.Key",
-        "/usr/keys/SoftCam.Key"
-    ]
+    paths = ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/ncam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key", "/usr/keys/SoftCam.Key"]
     for p in paths:
         if os.path.exists(p): return p
     return "/etc/tuxbox/config/oscam/SoftCam.Key"
@@ -40,7 +35,7 @@ class BISSPro(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v3.0">
+        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v3.3">
             <widget name="menu" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(1060)},{self.ui.px(550)}" itemHeight="{self.ui.px(110)}" scrollbarMode="showOnDemand" transparent="1"/>
             <eLabel position="{self.ui.px(50)},{self.ui.px(600)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             <widget name="progress" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(15)}" transparent="1" />
@@ -66,127 +61,112 @@ class BISSPro(Screen):
                 MultiContentEntryText(pos=(self.ui.px(130), self.ui.px(25)), size=(self.ui.px(800), self.ui.px(60)), font=0, text=text, flags=RT_VALIGN_CENTER)
             ]))
         self["menu"].l.setList(lst)
-        if hasattr(self["menu"].l, 'setFont'): self["menu"].l.setFont(0, gFont("Regular", self.ui.font(32)))
 
     def save_biss_key(self, full_id, key, name):
         target = get_softcam_path()
         full_sid = full_id.zfill(8).upper()
         try:
-            if not os.path.exists(target):
-                os.system(f'touch {target}')
-            os.system(f'chmod 644 {target}')
             os.system(f"sed -i '/F {full_sid}/d' {target}")
             new_entry = f"F {full_sid} 00000000 {key.upper()} ;{name}"
             os.system(f'echo "{new_entry}" >> {target}')
-            
-            # ريستارت السوفتكام
             os.system("killall -9 oscam ncam >/dev/null 2>&1")
-            if os.path.exists("/etc/init.d/softcam"):
-                os.system("/etc/init.d/softcam restart >/dev/null 2>&1")
-            elif os.path.exists("/etc/init.d/cardserver"):
-                os.system("/etc/init.d/cardserver restart >/dev/null 2>&1")
+            if os.path.exists("/etc/init.d/softcam"): os.system("/etc/init.d/softcam restart >/dev/null 2>&1")
             return True
-        except:
-            return False
+        except: return False
 
     def ok(self):
         curr = self["menu"].getCurrent()
-        action = curr[0] if curr else None
-        service = self.session.nav.getCurrentService()
-        if action == "add":
-            self.session.openWithCallback(self.manual_done, HexInputScreen)
-        elif action in ["upd", "auto"]:
-            self["progress"].setValue(30)
-            if action == "upd":
-                self["status"].setText("Updating...")
-                Thread(target=self.do_update).start()
-            else:
-                self["status"].setText("Searching Online...")
-                Thread(target=self.do_auto, args=(service,)).start()
+        if curr and curr[0] == "add": self.session.openWithCallback(self.manual_done, HexInputScreen)
+        elif curr:
+            service = self.session.nav.getCurrentService()
+            if curr[0] == "upd": Thread(target=self.do_update).start()
+            else: Thread(target=self.do_auto, args=(service,)).start()
 
     def manual_done(self, key=None):
         if not key: return
         service = self.session.nav.getCurrentService()
-        if not service: return
-        info = service.info()
-        raw_sid = info.getInfo(iServiceInformation.sSID)
-        raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
-        hex_sid = "%04X" % (raw_sid & 0xFFFF)
-        hex_vpid = "%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000"
-        combined_id = hex_sid + hex_vpid
-        if self.save_biss_key(combined_id, key, info.getName()):
-            self.res = (True, f"Success: {combined_id}")
-        else:
-            self.res = (False, "Write Error")
-        self.timer.start(100, True)
+        if service:
+            info = service.info()
+            raw_sid, raw_vpid = info.getInfo(iServiceInformation.sSID), info.getInfo(iServiceInformation.sVideoPID)
+            combined_id = "%04X%04X" % (raw_sid & 0xFFFF, raw_vpid & 0xFFFF if raw_vpid != -1 else 0)
+            if self.save_biss_key(combined_id, key, info.getName()): self.res = (True, f"Saved: {combined_id}")
+            else: self.res = (False, "Error")
+            self.timer.start(100, True)
 
     def do_update(self):
         try:
             urlretrieve("https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key", "/tmp/SoftCam.Key")
             shutil.copy("/tmp/SoftCam.Key", get_softcam_path())
-            os.system(f"chmod 644 {get_softcam_path()}")
-            self.res = (True, "SoftCam Updated")
-        except: self.res = (False, "Download Error")
+            self.res = (True, "Updated")
+        except: self.res = (False, "Error")
         self.timer.start(100, True)
 
     def do_auto(self, service):
         try:
             info = service.info()
-            raw_sid = info.getInfo(iServiceInformation.sSID)
-            raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
-            hex_sid = "%04X" % (raw_sid & 0xFFFF)
-            hex_vpid = "%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000"
-            combined_id = hex_sid + hex_vpid
-            raw_data = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
-            m = re.search(hex_sid + r'.*?([0-9A-Fa-f]{16})', raw_data, re.I)
-            if m and self.save_biss_key(combined_id, m.group(1), info.getName()):
-                self.res = (True, f"Auto Saved: {combined_id}")
-            else:
-                self.res = (False, f"Not Found: {hex_sid}")
-        except: self.res = (False, "Server Error")
+            sid = "%04X" % (info.getInfo(iServiceInformation.sSID) & 0xFFFF)
+            vpid = info.getInfo(iServiceInformation.sVideoPID)
+            combined = "%s%04X" % (sid, vpid & 0xFFFF if vpid != -1 else 0)
+            data = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt").read().decode("utf-8")
+            m = re.search(sid + r'.*?([0-9A-Fa-f]{16})', data, re.I)
+            if m and self.save_biss_key(combined, m.group(1), info.getName()): self.res = (True, "Auto Saved")
+            else: self.res = (False, "Not Found")
+        except: self.res = (False, "Error")
         self.timer.start(100, True)
 
     def show_result(self):
-        self["progress"].setValue(100)
         self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR, timeout=5)
-        self["status"].setText("Ready"); self["progress"].setValue(0)
 
 class HexInputScreen(Screen):
     def __init__(self, session):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(800)},{self.ui.px(550)}" title="BISS Key Input">
-            <widget name="keylabel" position="20,20" size="760,60" font="Regular;{self.ui.font(44)}" halign="center" foregroundColor="#f0a30a" />
-            <widget name="hexlist" position="250,100" size="300,300" itemHeight="{self.ui.px(60)}" font="Regular;{self.ui.font(36)}" transparent="1" />
-            <ePixmap pixmap="skin_default/buttons/red.png" position="40,430" size="30,30" alphatest="on" />
-            <widget name="key_red" position="80,430" size="150,30" font="Regular;22" />
-            <ePixmap pixmap="skin_default/buttons/green.png" position="280,430" size="30,30" alphatest="on" />
-            <widget name="key_green" position="320,430" size="150,30" font="Regular;22" />
-            <ePixmap pixmap="skin_default/buttons/yellow.png" position="520,430" size="30,30" alphatest="on" />
-            <widget name="key_yellow" position="560,430" size="150,30" font="Regular;22" />
+        <screen position="center,center" size="{self.ui.px(900)},{self.ui.px(500)}" title="BISS KEY INPUT" backgroundColor="#1a1a1a">
+            <eLabel position="0,0" size="900,80" backgroundColor="#f0a30a" zPosition="-1" />
+            <widget name="title" position="20,10" size="860,60" font="Regular;{self.ui.font(38)}" halign="center" valign="center" transparent="1" />
+            <eLabel position="50,110" size="800,100" backgroundColor="#333333" cornerRadius="10" />
+            <widget name="keylabel" position="60,120" size="780,80" font="Regular;{self.ui.font(50)}" halign="center" valign="center" foregroundColor="#f0a30a" backgroundColor="#333333" transparent="1" />
+            
+            <widget name="hexlist" position="350,230" size="200,200" itemHeight="{self.ui.px(60)}" font="Regular;{self.ui.font(45)}" scrollbarMode="showNever" transparent="1" />
+            
+            <ePixmap pixmap="skin_default/buttons/green.png" position="380,440" size="30,30" alphatest="on" />
+            <widget name="key_green" position="420,440" size="150,30" font="Regular;22" transparent="1" />
+            <ePixmap pixmap="skin_default/buttons/yellow.png" position="650,440" size="30,30" alphatest="on" />
+            <widget name="key_yellow" position="690,440" size="150,30" font="Regular;22" transparent="1" />
         </screen>"""
-        self["keylabel"] = Label("____ ____ ____ ____")
-        self["key_red"] = Label("Exit"); self["key_green"] = Label("Save"); self["key_yellow"] = Label("Delete")
+        self["title"] = Label("USE NUMBERS FOR 0-9 & MENU FOR A-F")
+        self["keylabel"] = Label("")
+        self["key_green"] = Label("SAVE")
+        self["key_yellow"] = Label("DELETE")
         self.key = ""
-        self["hexlist"] = MenuList(["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"])
+        # هنا تم إخفاء الأرقام وترك الحروف فقط
+        self["hexlist"] = MenuList(["A", "B", "C", "D", "E", "F"])
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions"], {
-            "ok": self.add, "cancel": lambda: self.close(None), "red": lambda: self.close(None), "green": self.save, "yellow": self.backspace,
-            "0": lambda: self.keyNum("0"), "1": lambda: self.keyNum("1"), "2": lambda: self.keyNum("2"), "3": lambda: self.keyNum("3"),
-            "4": lambda: self.keyNum("4"), "5": lambda: self.keyNum("5"), "6": lambda: self.keyNum("6"), "7": lambda: self.keyNum("7"),
-            "8": lambda: self.keyNum("8"), "9": lambda: self.keyNum("9")}, -1)
+            "ok": self.add_from_list, "cancel": self.close, "green": self.save, "yellow": self.backspace,
+            "0": lambda: self.add("0"), "1": lambda: self.add("1"), "2": lambda: self.add("2"), "3": lambda: self.add("3"),
+            "4": lambda: self.add("4"), "5": lambda: self.add("5"), "6": lambda: self.add("6"), "7": lambda: self.add("7"),
+            "8": lambda: self.add("8"), "9": lambda: self.add("9")}, -1)
+        self.update_label()
+
     def update_label(self):
-        d = self.key + "_" * (16 - len(self.key))
-        self["keylabel"].setText(" ".join([d[i:i+4] for i in range(0, 16, 4)]))
-    def add(self):
-        if len(self.key) < 16: self.key += self["hexlist"].getCurrent(); self.update_label()
-    def keyNum(self, n):
-        if len(self.key) < 16: self.key += n; self.update_label()
+        display = self.key + "_" * (16 - len(self.key))
+        formatted = "  ".join([display[i:i+4] for i in range(0, 16, 4)])
+        self["keylabel"].setText(formatted)
+
+    def add(self, char):
+        if len(self.key) < 16: self.key += char; self.update_label()
+
+    def add_from_list(self):
+        char = self["hexlist"].getCurrent()
+        self.add(char)
+
     def backspace(self):
         if self.key: self.key = self.key[:-1]; self.update_label()
+
     def save(self):
         if len(self.key) == 16: self.close(self.key)
-        else: self.session.open(MessageBox, "16 digits required!", MessageBox.TYPE_ERROR)
+        else: self.session.open(MessageBox, "Need 16 digits!", MessageBox.TYPE_ERROR)
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v3.0 (Dynamic Path)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="v3.3 (A-F Only Menu)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
