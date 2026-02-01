@@ -10,16 +10,13 @@ from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_HALIGN_LEF
 from Tools.LoadPixmap import LoadPixmap
 from threading import Thread, Lock
 from urllib.request import urlopen, urlretrieve, Request
-import os, re, shutil, base64
+import os, re, shutil
 
-# تحديد المسارات بدقة
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
-# لضمان ظهور الأيقونة في القائمة، يجب أن تكون في المجلد الرئيسي للبلجن
 PLUGIN_ICON = os.path.join(PLUGIN_PATH, "plugin.png")
 ICON_PATH = os.path.join(PLUGIN_PATH, "icons/")
+BISS_FILE = "/etc/tuxbox/config/oscam/SoftCam.Key" if os.path.exists("/etc/tuxbox/config/oscam/") else "/etc/tuxbox/config/SoftCam.Key"
 
-UPDATE_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
-BISS_TXT_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt"
 lock = Lock()
 
 class AutoScale:
@@ -28,17 +25,6 @@ class AutoScale:
         self.scale = min(d.width() / 1920.0, d.height() / 1080.0)
     def px(self, v): return int(v * self.scale)
     def font(self, v): return int(max(18, v * self.scale))
-
-def get_key_path():
-    for p in ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key", "/usr/keys/SoftCam.Key"]:
-        if os.path.exists(p): return p
-    return "/etc/tuxbox/config/SoftCam.Key"
-
-BISS_FILE = get_key_path()
-
-def reload_cam_keys():
-    for cam in ("oscam", "ncam"):
-        os.system(f"killall -HUP {cam} >/dev/null 2>&1")
 
 class BISSPro(Screen):
     def __init__(self, session):
@@ -55,10 +41,12 @@ class BISSPro(Screen):
         self["actions"] = ActionMap(["OkCancelActions", "DirectionActions"], {
             "ok": self.ok, "cancel": self.close, "up": self["menu"].up, "down": self["menu"].down}, -1)
         
+        # حل مشكلة التايمر - الطريقة الأكثر أماناً لـ OpenATV 7.6
         self.timer = eTimer()
-        # الطريقة الصحيحة لربط التايمر في النسخ الجديدة
-        try: self.timer_conn = self.timer.timeout.connect(self.show_result)
-        except: self.timer.callback.append(self.show_result)
+        try:
+            self.timer.callback.append(self.show_result)
+        except:
+            self.timer_conn = self.timer.timeout.connect(self.show_result)
         
         self.onLayoutFinish.append(self.build_menu)
 
@@ -69,14 +57,11 @@ class BISSPro(Screen):
         lst = []
         for text, action, icon in items:
             p = os.path.join(ICON_PATH, icon)
-            pix = LoadPixmap(p) if os.path.exists(p) else None
             lst.append((action, [
-                MultiContentEntryPixmapAlphaTest(pos=(self.ui.px(10), self.ui.px(10)), size=(self.ui.px(100), self.ui.px(100)), png=pix),
-                MultiContentEntryText(pos=(self.ui.px(130), self.ui.px(30)), size=(self.ui.px(800), self.ui.px(60)), 
-                                     font=0, text=text, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER)
+                MultiContentEntryPixmapAlphaTest(pos=(self.ui.px(10), self.ui.px(10)), size=(self.ui.px(100), self.ui.px(100)), png=LoadPixmap(p)),
+                MultiContentEntryText(pos=(self.ui.px(130), self.ui.px(30)), size=(self.ui.px(800), self.ui.px(60)), font=0, text=text, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER)
             ]))
         self["menu"].l.setList(lst)
-        # تم تغيير طريقة ضبط الخط لتكون أكثر أماناً
         if hasattr(self["menu"].l, 'setFont'):
             self["menu"].l.setFont(0, gFont("Regular", self.ui.font(32)))
 
@@ -86,7 +71,6 @@ class BISSPro(Screen):
         action = curr[0]
         service = self.session.nav.getCurrentService()
         if action == "add" and service:
-            from .plugin import HexInputScreen # استيراد محلي لتجنب التعارض
             self.session.openWithCallback(self.manual_done, HexInputScreen)
         elif action == "upd":
             self["status"].setText("Updating...")
@@ -111,20 +95,19 @@ class BISSPro(Screen):
                 with open(BISS_FILE, "w") as f:
                     found = False
                     for l in lines:
-                        if sid in l:
+                        if sid in l.upper():
                             f.write(f"F {sid} 00000000 {key} ;{name}\n")
                             found = True
                         else: f.write(l)
                     if not found: f.write(f"F {sid} 00000000 {key} ;{name}\n")
-            reload_cam_keys()
+            os.system("killall -HUP oscam ncam >/dev/null 2>&1")
             return True
         except: return False
 
     def do_update(self):
         try:
-            urlretrieve(UPDATE_URL, "/tmp/SoftCam.Key")
+            urlretrieve("https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key", "/tmp/SoftCam.Key")
             shutil.copy("/tmp/SoftCam.Key", BISS_FILE)
-            reload_cam_keys()
             self.res = (True, "Updated Successfully")
         except: self.res = (False, "Update Failed")
         self.timer.start(100, True)
@@ -133,22 +116,18 @@ class BISSPro(Screen):
         try:
             info = service.info()
             sid = "%08X" % info.getInfo(iServiceInformation.sSID)
-            raw = urlopen(BISS_TXT_URL, timeout=10).read().decode("utf-8")
-            if sid in raw.upper():
-                m = re.search(sid + r'.*?([0-9A-Fa-f]{16})', raw, re.I)
-                if m and self.save_key(sid, m.group(1), info.getName()):
-                    self.res = (True, "Auto-Added!")
-                    self.timer.start(100, True)
-                    return
-            self.res = (False, "No Key Found")
+            raw = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
+            m = re.search(sid + r'.*?([0-9A-Fa-f]{16})', raw, re.I)
+            if m and self.save_key(sid, m.group(1), info.getName()):
+                self.res = (True, "Auto-Added!")
+            else: self.res = (False, "No Key Found")
         except: self.res = (False, "Connection Error")
         self.timer.start(100, True)
 
     def show_result(self):
-        self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR)
+        self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR, timeout=5)
         self["status"].setText("")
 
-# كلاس إدخال المفتاح (معدل)
 class HexInputScreen(Screen):
     def __init__(self, session):
         self.ui = AutoScale()
@@ -161,8 +140,7 @@ class HexInputScreen(Screen):
         self.key = ""
         self["keylabel"] = Label("Key: " + "_"*16)
         self["hexlist"] = MenuList(["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"])
-        self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {
-            "ok": self.add, "cancel": self.close, "red": self.close, "green": self.save}, -1)
+        self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {"ok": self.add, "cancel": self.close, "green": self.save}, -1)
     def add(self):
         if len(self.key) < 16:
             self.key += self["hexlist"].getCurrent()
