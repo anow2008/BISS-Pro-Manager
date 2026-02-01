@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # =========================================================
 # BissPro Manager – Python 3 – FHD – Online Update
-# Fixed Edit/Delete + Plugin Icon
+# Improved UI + Fixed Edit/Delete + Plugin Icon
 # =========================================================
 
 from Plugins.Plugin import PluginDescriptor
@@ -24,7 +24,7 @@ BISS_TXT_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/biss
 
 # ================= Plugin Info =================
 PLUGIN_NAME = "BissPro"
-PLUGIN_VERSION = "1.6-py3-FHD"
+PLUGIN_VERSION = "1.7-py3-FHD"
 
 # ================= Config =================
 config.plugins.bisspro = ConfigSubsection()
@@ -174,14 +174,21 @@ class EasyBissInput(Screen):
 # ================= Main Screen =================
 class BISSPro(Screen):
     skin = """
-    <screen position="center,center" size="1000,540" title="BissPro Manager">
-        <widget name="menu" position="80,80" size="840,380"/>
-        <widget name="status" position="80,470" size="840,40"
-            font="Regular;24" halign="center"/>
-    </screen>"""
+    <screen position="center,center" size="1100,600" title="BissPro Manager">
+        <ePixmap position="0,0" size="1100,60" pixmap="skin_default/menu.png" scale="stretch" />
+        <widget name="title" position="20,10" size="1060,40"
+            font="Regular;30" halign="center" valign="center" />
+        <widget name="menu" position="80,90" size="940,400"
+            scrollbarMode="showOnDemand" />
+        <ePixmap position="0,510" size="1100,90" pixmap="skin_default/menu.png" scale="stretch" />
+        <widget name="status" position="40,530" size="1020,40"
+            font="Regular;24" halign="center" valign="center" />
+    </screen>
+    """
 
     def __init__(self, session):
         Screen.__init__(self, session)
+        self["title"] = Label("BissPro – BISS Key Manager")
         self["menu"] = MenuList([
             ("Add BISS Key", "add"),
             ("Edit BISS Key", "edit"),
@@ -189,7 +196,9 @@ class BISSPro(Screen):
             ("Online Update SoftCam.Key", "update"),
             ("Import BISS from biss.txt", "import"),
         ])
-        self["status"] = Label("")
+        self["menu"].l.setItemHeight(55)
+        self["status"] = Label("Ready")
+
         self["actions"] = ActionMap(
             ["OkCancelActions"],
             {"ok": self.ok, "cancel": self.close},
@@ -204,6 +213,7 @@ class BISSPro(Screen):
         name = info.getName().replace(" ", "_") if info else "Channel"
 
         if sel == "add":
+            self["status"].setText("Adding key...")
             self.session.open(EasyBissInput, sid, "add", None, name)
 
         elif sel == "edit":
@@ -211,6 +221,7 @@ class BISSPro(Screen):
             if not old:
                 self.session.open(MessageBox, "No BISS key for this channel", MessageBox.TYPE_ERROR, 3)
                 return
+            self["status"].setText("Editing key...")
             self.session.open(EasyBissInput, sid, "edit", old, name)
 
         elif sel == "delete":
@@ -221,9 +232,11 @@ class BISSPro(Screen):
 
             def do_delete(answer):
                 if answer:
+                    self["status"].setText("Deleting key...")
                     create_backup()
                     write_keys([l for l in read_keys() if l != old])
                     restartSoftcam()
+                    self["status"].setText("Key deleted")
                     self.session.open(MessageBox, "BISS key deleted", MessageBox.TYPE_INFO, 3)
 
             self.session.openWithCallback(
@@ -234,12 +247,15 @@ class BISSPro(Screen):
             )
 
         elif sel == "update":
+            self["status"].setText("Updating SoftCam.Key...")
             create_backup()
             if download(UPDATE_URL, BISS_FILE):
                 restartSoftcam()
+                self["status"].setText("Update done")
                 self.session.open(MessageBox, "SoftCam.Key Updated", MessageBox.TYPE_INFO, 3)
 
         elif sel == "import":
+            self["status"].setText("Importing keys...")
             tmp = "/tmp/biss.txt"
             if download(BISS_TXT_URL, tmp):
                 create_backup()
@@ -248,6 +264,7 @@ class BISSPro(Screen):
                         if l.startswith("F "):
                             out.write(l)
                 restartSoftcam()
+                self["status"].setText("Import done")
                 self.session.open(MessageBox, "BISS Imported", MessageBox.TYPE_INFO, 3)
 
 # ================= Entry =================
@@ -262,4 +279,3 @@ def Plugins(**kwargs):
         icon="icon.png",
         fnc=main
     )]
-
