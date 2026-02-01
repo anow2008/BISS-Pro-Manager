@@ -12,7 +12,6 @@ from threading import Thread, Lock
 from urllib.request import urlopen, urlretrieve, Request
 import os, re, shutil, base64
 
-# Constants and Paths
 PLUGIN_NAME = "BissPro"
 PLUGIN_VERSION = "1.0"
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
@@ -20,11 +19,8 @@ ICON_PATH = PLUGIN_PATH + "/icons/"
 PLUGIN_ICON = ICON_PATH + "plugin.png"
 UPDATE_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
 BISS_TXT_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt"
-
-# BISS File Path and Lock
 lock = Lock()
 
-# Utility Classes
 class AutoScale:
     BASE_W = 1920.0
     BASE_H = 1080.0
@@ -36,10 +32,8 @@ class AutoScale:
         self.scale = min(self.w / self.BASE_W, self.h / self.BASE_H)
 
     def px(self, v): return int(v * self.scale)
-
     def font(self, v): return int(max(18, v * self.scale))
 
-# Functions
 def get_key_path():
     paths = ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key", "/usr/keys/SoftCam.Key"]
     for p in paths:
@@ -51,9 +45,15 @@ BISS_FILE = get_key_path()
 def ensure_biss_file():
     try:
         os.makedirs(os.path.dirname(BISS_FILE), exist_ok=True)
-        if not os.path.exists(BISS_FILE): open(BISS_FILE, "w").close()
+        if not os.path.exists(BISS_FILE):
+            open(BISS_FILE, "w").close()
         return os.access(BISS_FILE, os.W_OK)
-    except: return False
+    except PermissionError:
+        print("Error: Insufficient permissions to write to the BISS file.")
+        return False
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
 
 def get_cam_webif_data():
     confs = ["/etc/tuxbox/config/oscam/oscam.conf", "/etc/tuxbox/config/ncam/ncam.conf", "/etc/tuxbox/config/oscam.conf", "/etc/tuxbox/config/ncam.conf"]
@@ -81,10 +81,13 @@ def reload_cam_keys():
             if user or pwd:
                 auth = base64.b64encode(f"{user}:{pwd}".encode()).decode()
                 req.add_header("Authorization", f"Basic {auth}")
-            with urlopen(req, timeout=3) as r:
-                if r.status == 200: return True
-        except: pass
-    for cam in ("oscam", "ncam"): os.system(f"killall -HUP {cam} >/dev/null 2>&1")
+            with urlopen(req, timeout=10) as r:
+                if r.status == 200:
+                    return True
+        except Exception as e:
+            print(f"Error while reloading CAM keys: {e}")
+    for cam in ("oscam", "ncam"):
+        os.system(f"killall -HUP {cam} >/dev/null 2>&1")
     return True
 
 def extract_biss_key_from_block(block):
@@ -95,18 +98,32 @@ def write_biss_key(sid, key, name):
     if not ensure_biss_file(): return False
     key = key[:16].upper()
     with lock:
-        lines = []
-        if os.path.exists(BISS_FILE): lines = open(BISS_FILE).readlines()
-        new = []
-        found = False
-        for l in lines:
-            if l.strip().startswith("F") and sid in l: new.append(f"F {sid} 00000000 {key} ;{name}\n"); found = True
-            else: new.append(l)
-        if not found: new.append(f"F {sid} 00000000 {key} ;{name}\n")
-        open(BISS_FILE, "w").writelines(new)
-    return True
+        try:
+            if os.path.exists(BISS_FILE):
+                with open(BISS_FILE, "r") as f:
+                    lines = f.readlines()
+            else:
+                lines = []
 
-# Screens and UI Elements
+            new = []
+            found = False
+            for l in lines:
+                if l.strip().startswith("F") and sid in l:
+                    new.append(f"F {sid} 00000000 {key} ;{name}\n")
+                    found = True
+                else:
+                    new.append(l)
+
+            if not found:
+                new.append(f"F {sid} 00000000 {key} ;{name}\n")
+
+            with open(BISS_FILE, "w") as f:
+                f.writelines(new)
+            return True
+        except IOError as e:
+            print(f"Error while writing to BISS file: {e}")
+            return False
+
 class HexInputScreen(Screen):
     def __init__(self, session):
         self.ui = AutoScale()
@@ -135,18 +152,26 @@ class HexInputScreen(Screen):
         self["keylabel"].setText("Key: " + self.key + "_" * (16 - len(self.key)))
 
     def add_char(self):
-        if len(self.key) < 16: self.key += self["hexlist"].getCurrent(); self.update_label()
+        if len(self.key) < 16:
+            self.key += self["hexlist"].getCurrent()
+            self.update_label()
 
     def keyNumberGlobal(self, number):
-        if len(self.key) < 16: self.key += str(number); self.update_label()
+        if len(self.key) < 16:
+            self.key += str(number)
+            self.update_label()
         return True
 
-    def backspace(self): self.key = self.key[:-1]; self.update_label()
+    def backspace(self):
+        self.key = self.key[:-1]
+        self.update_label()
 
     def save(self):
-        if len(self.key) == 16: self.close(self.key)
+        if len(self.key) == 16:
+            self.close(self.key)
 
-    def cancel(self): self.close(None)
+    def cancel(self):
+        self.close(None)
 
 class BISSPro(Screen):
     def __init__(self, session):
@@ -165,8 +190,7 @@ class BISSPro(Screen):
         self.timer.callback.append(self.show_result)
 
     def build_menu(self):
-        items = [("Add BISS Manually", "add", ICON_PATH + "add.png"), ("Update SoftCam.Key", "upd", ICON_PATH + "update.png"),
-                 ("Auto Add BISS", "auto", ICON_PATH + "autoadd.png")]
+        items = [("Add BISS Manually", "add", ICON_PATH + "add.png"), ("Update SoftCam.Key", "upd", ICON_PATH + "update.png"), ("Auto Add BISS", "auto", ICON_PATH + "autoadd.png")]
         lst = []
         for t, a, p in items:
             lst.append((a, [MultiContentEntryPixmapAlphaTest(pos=(self.ui.px(10), self.ui.px(10)), size=(self.ui.px(100), self.ui.px(100)), png=LoadPixmap(p)),
@@ -174,7 +198,8 @@ class BISSPro(Screen):
         self["menu"] = MenuList(lst)
         self["menu"].l.setFont(0, gFont("Regular", self.ui.font(32)))
 
-    def update_status(self, txt): self["status"].setText(txt)
+    def update_status(self, txt):
+        self["status"].setText(txt)
 
     def ok(self):
         action = self["menu"].getCurrent()[0]
@@ -186,7 +211,9 @@ class BISSPro(Screen):
         elif action == "auto" and service:
             Thread(target=self.do_auto, args=(service,)).start()
 
-    def start_manual(self, service): self.service = service; self.session.openWithCallback(self.manual_done, HexInputScreen)
+    def start_manual(self, service):
+        self.service = service
+        self.session.openWithCallback(self.manual_done, HexInputScreen)
 
     def manual_done(self, key):
         if not key: return
@@ -207,8 +234,8 @@ class BISSPro(Screen):
             shutil.copy("/tmp/SoftCam.Key", BISS_FILE)
             Thread(target=reload_cam_keys).start()
             self.res = (True, "SoftCam.Key updated")
-        except:
-            self.res = (False, "Update failed")
+        except Exception as e:
+            self.res = (False, f"Update failed: {e}")
         self.timer.start(100, True)
 
     def do_auto(self, service):
@@ -222,23 +249,25 @@ class BISSPro(Screen):
             found = False
             for i in range(0, len(lines), 4):
                 block = lines[i:i + 4]
-                key = extract_biss_key_from_block(block)
-                if key and write_biss_key(sid, key, name):
-                    Thread(target=reload_cam_keys).start()
-                    self.res = (True, "BISS key added automatically")
-                    found = True
-                    break
+                if len(block) == 4:  # تأكد أن block يحتوي على 4 عناصر
+                    key = extract_biss_key_from_block(block)
+                    if key and write_biss_key(sid, key, name):
+                        Thread(target=reload_cam_keys).start()
+                        self.res = (True, "BISS key added automatically")
+                        found = True
+                        break
             if not found:
                 self.res = (False, "No key found. Make sure you are on the encrypted channel.")
-        except:
-            self.res = (False, "Auto add failed")
+        except Exception as e:
+            self.res = (False, f"Auto add failed: {e}")
         self.timer.start(100, True)
 
     def show_result(self):
         self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR, 5)
         self.update_status("")
 
-# Main Functions
-def main(session, **kwargs): session.open(BISSPro)
+def main(session, **kwargs):
+    session.open(BISSPro)
 
-def Plugins(**kwargs): return [PluginDescriptor(name=PLUGIN_NAME, description="BissPro Manager", icon=PLUGIN_ICON, where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs):
+    return [PluginDescriptor(name=PLUGIN_NAME, description="BissPro Manager", icon=PLUGIN_ICON, where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
