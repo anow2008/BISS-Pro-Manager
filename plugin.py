@@ -2,7 +2,7 @@
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
 from Screens.MessageBox import MessageBox
-from Screens.InputBox import InputBox
+from Screens.ChoiceBox import ChoiceBox
 from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
@@ -11,8 +11,7 @@ from enigma import iServiceInformation, gFont, eTimer, getDesktop
 from Tools.LoadPixmap import LoadPixmap
 from threading import Thread, Lock
 from urllib.request import urlopen, urlretrieve
-import os, re, shutil
-import subprocess
+import os, re, shutil, subprocess
 
 PLUGIN_NAME = "BissPro"
 PLUGIN_VERSION = "1.0"
@@ -56,12 +55,36 @@ def extract_biss_key_from_block(block):
     return None
 
 def restart_softcam():
-    softcams = ["oscam", "cccam", "mgcamd", "ncamd"]  # كل SoftCam محتمل
+    softcams = ["oscam", "cccam", "mgcamd", "ncamd"]
     for sc in softcams:
         try:
             subprocess.call(["killall", "-HUP", sc])
         except Exception as e:
             print(f"Restart {sc} failed:", e)
+
+def write_biss_key(sid, key, name):
+    try:
+        with lock:
+            lines = []
+            if os.path.exists(BISS_FILE):
+                with open(BISS_FILE, "r") as f:
+                    lines = f.readlines()
+            new_lines = []
+            sid_found = False
+            for l in lines:
+                if l.strip().startswith("F") and l.split()[1] == sid:
+                    new_lines.append(f"F {sid} 00000000 {key} ;{name}\n")
+                    sid_found = True
+                else:
+                    new_lines.append(l)
+            if not sid_found:
+                new_lines.append(f"F {sid} 00000000 {key} ;{name}\n")
+            with open(BISS_FILE, "w") as f:
+                f.writelines(new_lines)
+        return True
+    except Exception as e:
+        print("Write BISS error:", e)
+        return False
 
 # ======== Main Screen ========
 class BISSPro(Screen):
@@ -77,8 +100,9 @@ class BISSPro(Screen):
         self.update_menu()
         self["status"] = Label("")
         self["actions"] = ActionMap(
-            ["OkCancelActions","DirectionActions"],
-            {"ok": self.ok,"cancel":self.close,"up":self["menu"].up,"down":self["menu"].down}, -1
+            ["OkCancelActions","DirectionActions","NumberActions"],
+            {"ok": self.ok, "cancel": self.close, "up": self["menu"].up, "down": self["menu"].down},
+            -1
         )
         self.timer = eTimer()
         self.timer.callback.append(self.show_result)
@@ -92,7 +116,6 @@ class BISSPro(Screen):
             ("Update SoftCam.Key", "upd", ICON_PATH + "update.png"),
             ("Auto Add BISS", "autoadd", ICON_PATH + "autoadd.png")
         ]
-
         self.menu_list = []
         for t, a, p in items:
             self.menu_list.append((a, [
@@ -105,35 +128,59 @@ class BISSPro(Screen):
     def ok(self):
         action = self["menu"].getCurrent()[0]
         service = self.session.nav.getCurrentService()
-        if action == "add": 
-            self.session.openWithCallback(self.manual_add_callback, InputBox, title="Enter BISS Key", text="")
-        elif action == "upd": 
+        if action == "add" and service:
+            self.start_manual_input(service)
+        elif action == "upd":
             Thread(target=self.do_upd).start()
-        elif action == "autoadd" and service: 
+        elif action == "autoadd" and service:
             Thread(target=self.do_auto_add, args=(service,)).start()
 
-    def manual_add_callback(self, result):
-        if result:
-            service = self.session.nav.getCurrentService()
-            if service:
-                self.update_status("Adding BISS key manually...")
-                sid = "%08X" % service.info().getInfo(iServiceInformation.sSID)
-                name = service.info().getName()
-                key = re.sub(r'[^0-9A-Fa-f]', '', result.strip()).upper()
-                if len(key) == 16:
-                    try:
-                        with lock:
-                            with open(BISS_FILE, "a+") as f:
-                                f.write(f"\nF {sid} 00000000 {key} ;{name}\n")
-                        self.update_status("Restarting SoftCam...")
-                        restart_softcam()
-                        self.res = (True, f"Added BISS key for {name}")
-                    except:
-                        self.res = (False, "Failed to write key")
-                else:
-                    self.res = (False, "Invalid key format")
-                self.timer.start(100, True)
+    # ===== Manual BISS Input with Number + Letter Selection =====
+    def start_manual_input(self, service):
+        self.input_key = ""
+        self.current_service = service
+        self.update_status(f"Key: {'_'*16}")
+        self.show_letter_choice()
 
+    def show_letter_choice(self):
+        if len(self.input_key) >= 16:
+            # 16 chars complete
+            self.save_manual_key()
+            return
+        letters = ["A","B","C","D","E","F"]
+        self.session.openWithCallback(self.letter_selected, ChoiceBox, title="Select Hex Letter", list=letters)
+
+    def letter_selected(self, result):
+        if result:
+            self.input_key += result
+            display = self.input_key + "_"*(16-len(self.input_key))
+            self.update_status(f"Key: {display}")
+        self.show_letter_choice()  # show choice again until 16 chars
+
+    def keyNumberGlobal(self, number):
+        # called automatically on number press
+        if hasattr(self, "input_key") and len(self.input_key) < 16:
+            self.input_key += str(number)
+            display = self.input_key + "_"*(16-len(self.input_key))
+            self.update_status(f"Key: {display}")
+            if len(self.input_key) == 16:
+                self.save_manual_key()
+        return True
+
+    def save_manual_key(self):
+        service = self.current_service
+        sid = "%08X" % service.info().getInfo(iServiceInformation.sSID)
+        name = service.info().getName()
+        success = write_biss_key(sid, self.input_key, name)
+        if success:
+            self.update_status("Restarting SoftCam...")
+            restart_softcam()
+            self.res = (True, f"Added BISS key for {name}")
+        else:
+            self.res = (False, "Failed to write key")
+        self.timer.start(100, True)
+
+    # ===== Update SoftCam.Key =====
     def do_upd(self):
         try:
             self.update_status("Updating SoftCam.Key...")
@@ -146,13 +193,14 @@ class BISSPro(Screen):
             self.res = (False, "Failed to update SoftCam.Key")
         self.timer.start(100, True)
 
+    # ===== Auto Add BISS =====
     def do_auto_add(self, service):
         try:
             self.update_status("Auto adding BISS key...")
             info = service.info()
             sid = "%08X" % info.getInfo(iServiceInformation.sSID)
             name = info.getName()
-            freq = str(info.getInfo(iServiceInformation.sTransponderData))
+            freq = int(info.getInfo(iServiceInformation.sTransponderData))
 
             raw = urlopen(BISS_TXT_URL, timeout=10).read().decode("utf-8","replace")
             lines = raw.splitlines()
@@ -163,13 +211,12 @@ class BISSPro(Screen):
                 if len(block) < 4: continue
                 file_freq = re.sub(r'[^0-9]', '', block[1])
                 file_name = re.sub(r'[^A-Za-z0-9 ]', '', block[2])
-                if freq == file_freq and name.replace(" ","") == file_name.replace(" ",""):
+                if abs(freq - int(file_freq)) <= 2 and name.replace(" ","") == file_name.replace(" ",""):
                     key = extract_biss_key_from_block(block)
                     if key:
-                        with lock:
-                            with open(BISS_FILE, "a+") as f:
-                                f.write(f"\nF {sid} 00000000 {key} ;{name}\n")
-                        found = True
+                        success = write_biss_key(sid, key, name)
+                        if success:
+                            found = True
                         break
             if found:
                 self.update_status("Restarting SoftCam...")
@@ -182,11 +229,12 @@ class BISSPro(Screen):
             self.res = (False, "Auto add failed")
         self.timer.start(100, True)
 
+    # ===== Show Result =====
     def show_result(self):
         self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR, 5)
-        self.update_status("")  # رجع شريط الحالة فاضي بعد الرسالة
+        self.update_status("")
 
-# ======== Entry Points ========
+# ===== Entry Points =====
 def main(session, **kwargs):
     session.open(BISSPro)
 
@@ -200,3 +248,4 @@ def Plugins(**kwargs):
             fnc=main
         )
     ]
+
