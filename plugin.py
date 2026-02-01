@@ -39,7 +39,7 @@ class BISSPro(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v2.8">
+        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v2.9">
             <widget name="menu" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(1060)},{self.ui.px(550)}" itemHeight="{self.ui.px(110)}" scrollbarMode="showOnDemand" transparent="1"/>
             <eLabel position="{self.ui.px(50)},{self.ui.px(600)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             <widget name="progress" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(15)}" transparent="1" />
@@ -69,7 +69,6 @@ class BISSPro(Screen):
 
     def save_biss_key(self, full_id, key, name):
         target = get_softcam_path()
-        # نستخدم المعرف الكامل كما هو (8 أرقام)
         full_sid = full_id.zfill(8).upper()
         
         try:
@@ -77,14 +76,20 @@ class BISSPro(Screen):
                 os.system(f'touch {target}')
             os.system(f'chmod 644 {target}')
 
-            # حذف أي شفرة قديمة لنفس المعرف لضمان عدم التكرار
+            # حذف الشفرة القديمة
             os.system(f"sed -i '/F {full_sid}/d' {target}")
 
-            # السطر الجديد بالصيغة التي طلبتها
+            # إضافة الشفرة الجديدة
             new_entry = f"F {full_sid} 00000000 {key.upper()} ;{name}"
             os.system(f'echo "{new_entry}" >> {target}')
             
-            os.system("killall -HUP oscam ncam >/dev/null 2>&1")
+            # --- إعادة تشغيل السوفتكام لضمان التفعيل ---
+            os.system("killall -9 oscam ncam >/dev/null 2>&1")
+            if os.path.exists("/etc/init.d/softcam"):
+                os.system("/etc/init.d/softcam restart >/dev/null 2>&1")
+            elif os.path.exists("/etc/init.d/cardserver"):
+                os.system("/etc/init.d/cardserver restart >/dev/null 2>&1")
+            
             return True
         except:
             return False
@@ -110,17 +115,16 @@ class BISSPro(Screen):
         if not service: return
         info = service.info()
         
-        # استخراج الـ SID والـ Video PID ودمجهم (0001 + 0201)
+        # استخراج SID + VPID
         raw_sid = info.getInfo(iServiceInformation.sSID)
         raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
         
         hex_sid = "%04X" % (raw_sid & 0xFFFF)
         hex_vpid = "%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000"
-        
         combined_id = hex_sid + hex_vpid
         
         if self.save_biss_key(combined_id, key, info.getName()):
-            self.res = (True, f"Saved: {combined_id}")
+            self.res = (True, f"Saved & Restarted: {combined_id}")
         else:
             self.res = (False, "Write Error")
         self.timer.start(100, True)
@@ -145,12 +149,10 @@ class BISSPro(Screen):
             combined_id = hex_sid + hex_vpid
             
             raw_data = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
-            # نبحث بالـ SID (أول 4 أرقام) في الملف أونلاين
             m = re.search(hex_sid + r'.*?([0-9A-Fa-f]{16})', raw_data, re.I)
             
-            # عند الحفظ نستخدم الـ combined_id (8 أرقام)
             if m and self.save_biss_key(combined_id, m.group(1), info.getName()):
-                self.res = (True, f"Auto Saved: {combined_id}")
+                self.res = (True, f"Auto Saved & Restarted: {combined_id}")
             else:
                 self.res = (False, f"Not Found: {hex_sid}")
         except: self.res = (False, "Server Error")
@@ -199,4 +201,4 @@ class HexInputScreen(Screen):
         else: self.session.open(MessageBox, "16 digits required!", MessageBox.TYPE_ERROR)
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v2.8 (SID+VPID)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v2.9 (Restart Fixed)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
