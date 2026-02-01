@@ -7,7 +7,7 @@ from Components.MenuList import MenuList
 from Components.Label import Label
 from Components.ProgressBar import ProgressBar
 from Components.MultiContent import MultiContentEntryPixmapAlphaTest, MultiContentEntryText
-from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_HALIGN_LEFT, RT_VALIGN_CENTER
+from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_HALIGN_LEFT, RT_VALIGN_CENTER, RT_HALIGN_CENTER
 from Tools.LoadPixmap import LoadPixmap
 from threading import Thread
 from urllib.request import urlopen, urlretrieve
@@ -35,8 +35,8 @@ class BISSPro(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v3.3">
-            <widget name="menu" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(1060)},{self.ui.px(550)}" itemHeight="{self.ui.px(110)}" scrollbarMode="showOnDemand" transparent="1"/>
+        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v3.4">
+            <widget name="menu" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(1060)},{self.ui.px(550)}" itemHeight="{self.ui.px(110)}" transparent="1"/>
             <eLabel position="{self.ui.px(50)},{self.ui.px(600)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             <widget name="progress" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(15)}" transparent="1" />
             <widget name="status" position="{self.ui.px(50)},{self.ui.px(650)}" size="{self.ui.px(1000)},{self.ui.px(60)}" font="Regular;{self.ui.font(30)}" halign="center" valign="center" transparent="1" foregroundColor="#f0a30a"/>
@@ -122,28 +122,31 @@ class HexInputScreen(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(900)},{self.ui.px(500)}" title="BISS KEY INPUT" backgroundColor="#1a1a1a">
+        <screen position="center,center" size="{self.ui.px(900)},{self.ui.px(550)}" title="BISS KEY EDITOR" backgroundColor="#1a1a1a">
             <eLabel position="0,0" size="900,80" backgroundColor="#f0a30a" zPosition="-1" />
-            <widget name="title" position="20,10" size="860,60" font="Regular;{self.ui.font(38)}" halign="center" valign="center" transparent="1" />
+            <widget name="title" position="20,10" size="860,60" font="Regular;{self.ui.font(38)}" halign="center" valign="center" foregroundColor="#ffffff" backgroundColor="#f0a30a" transparent="1" />
+            
             <eLabel position="50,110" size="800,100" backgroundColor="#333333" cornerRadius="10" />
-            <widget name="keylabel" position="60,120" size="780,80" font="Regular;{self.ui.font(50)}" halign="center" valign="center" foregroundColor="#f0a30a" backgroundColor="#333333" transparent="1" />
+            <widget name="keylabel" position="60,120" size="780,80" font="Regular;{self.ui.font(55)}" halign="center" valign="center" foregroundColor="#f0a30a" backgroundColor="#333333" transparent="1" />
             
-            <widget name="hexlist" position="350,230" size="200,200" itemHeight="{self.ui.px(60)}" font="Regular;{self.ui.font(45)}" scrollbarMode="showNever" transparent="1" />
+            <widget name="letters" position="50,230" size="800,80" font="Regular;{self.ui.font(45)}" halign="center" foregroundColor="#ffffff" transparent="1" />
+            <widget name="hexlist" position="250,320" size="400,80" itemHeight="{self.ui.px(70)}" font="Regular;{self.ui.font(50)}" transparent="1" />
             
-            <ePixmap pixmap="skin_default/buttons/green.png" position="380,440" size="30,30" alphatest="on" />
-            <widget name="key_green" position="420,440" size="150,30" font="Regular;22" transparent="1" />
-            <ePixmap pixmap="skin_default/buttons/yellow.png" position="650,440" size="30,30" alphatest="on" />
-            <widget name="key_yellow" position="690,440" size="150,30" font="Regular;22" transparent="1" />
+            <ePixmap pixmap="skin_default/buttons/red.png" position="40,480" size="30,30" alphatest="on" />
+            <widget name="key_red" position="80,480" size="160,30" font="Regular;22" />
+            <ePixmap pixmap="skin_default/buttons/green.png" position="350,480" size="30,30" alphatest="on" />
+            <widget name="key_green" position="390,480" size="160,30" font="Regular;22" />
+            <ePixmap pixmap="skin_default/buttons/yellow.png" position="650,480" size="30,30" alphatest="on" />
+            <widget name="key_yellow" position="690,480" size="160,30" font="Regular;22" />
         </screen>"""
-        self["title"] = Label("USE NUMBERS FOR 0-9 & MENU FOR A-F")
+        self["title"] = Label("REMOTE: 0-9 | MENU: A-F")
         self["keylabel"] = Label("")
-        self["key_green"] = Label("SAVE")
-        self["key_yellow"] = Label("DELETE")
+        self["letters"] = Label("A   B   C   D   E   F")
+        self["key_red"] = Label("EXIT"); self["key_green"] = Label("SAVE"); self["key_yellow"] = Label("DELETE")
         self.key = ""
-        # هنا تم إخفاء الأرقام وترك الحروف فقط
         self["hexlist"] = MenuList(["A", "B", "C", "D", "E", "F"])
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions"], {
-            "ok": self.add_from_list, "cancel": self.close, "green": self.save, "yellow": self.backspace,
+            "ok": self.add_from_list, "cancel": self.close, "red": self.close, "green": self.save, "yellow": self.backspace,
             "0": lambda: self.add("0"), "1": lambda: self.add("1"), "2": lambda: self.add("2"), "3": lambda: self.add("3"),
             "4": lambda: self.add("4"), "5": lambda: self.add("5"), "6": lambda: self.add("6"), "7": lambda: self.add("7"),
             "8": lambda: self.add("8"), "9": lambda: self.add("9")}, -1)
@@ -158,15 +161,14 @@ class HexInputScreen(Screen):
         if len(self.key) < 16: self.key += char; self.update_label()
 
     def add_from_list(self):
-        char = self["hexlist"].getCurrent()
-        self.add(char)
+        self.add(self["hexlist"].getCurrent())
 
     def backspace(self):
         if self.key: self.key = self.key[:-1]; self.update_label()
 
     def save(self):
         if len(self.key) == 16: self.close(self.key)
-        else: self.session.open(MessageBox, "Need 16 digits!", MessageBox.TYPE_ERROR)
+        else: self.session.open(MessageBox, "Must enter 16 digits!", MessageBox.TYPE_ERROR)
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="v3.3 (A-F Only Menu)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="v3.4 (A-F Horizontal)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
