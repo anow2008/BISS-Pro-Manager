@@ -39,7 +39,7 @@ class BISSPro(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v2.7">
+        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v2.8">
             <widget name="menu" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(1060)},{self.ui.px(550)}" itemHeight="{self.ui.px(110)}" scrollbarMode="showOnDemand" transparent="1"/>
             <eLabel position="{self.ui.px(50)},{self.ui.px(600)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             <widget name="progress" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(15)}" transparent="1" />
@@ -67,22 +67,20 @@ class BISSPro(Screen):
         self["menu"].l.setList(lst)
         if hasattr(self["menu"].l, 'setFont'): self["menu"].l.setFont(0, gFont("Regular", self.ui.font(32)))
 
-    def save_biss_key(self, sid, key, name):
+    def save_biss_key(self, full_id, key, name):
         target = get_softcam_path()
-        # تنسيق الـ SID ليكون 4 أرقام ستة عشرية (مثلاً 0001 أو 1234)
-        clean_sid = sid.zfill(4).upper()
-        full_sid = f"0000{clean_sid}" if len(clean_sid) <= 4 else clean_sid.zfill(8)
+        # نستخدم المعرف الكامل كما هو (8 أرقام)
+        full_sid = full_id.zfill(8).upper()
         
         try:
             if not os.path.exists(target):
                 os.system(f'touch {target}')
             os.system(f'chmod 644 {target}')
 
-            # حذف أي شفرة قديمة لنفس الـ SID
+            # حذف أي شفرة قديمة لنفس المعرف لضمان عدم التكرار
             os.system(f"sed -i '/F {full_sid}/d' {target}")
-            os.system(f"sed -i '/F {clean_sid}/d' {target}")
 
-            # السطر الجديد بالصيغة القياسية
+            # السطر الجديد بالصيغة التي طلبتها
             new_entry = f"F {full_sid} 00000000 {key.upper()} ;{name}"
             os.system(f'echo "{new_entry}" >> {target}')
             
@@ -111,12 +109,18 @@ class BISSPro(Screen):
         service = self.session.nav.getCurrentService()
         if not service: return
         info = service.info()
-        # استخراج الـ SID الحقيقي وتحويله لـ Hex بشكل صحيح
-        raw_sid = info.getInfo(iServiceInformation.sSID)
-        hex_sid = "%04X" % (raw_sid & 0xFFFF)
         
-        if self.save_biss_key(hex_sid, key, info.getName()):
-            self.res = (True, f"Saved: SID {hex_sid}")
+        # استخراج الـ SID والـ Video PID ودمجهم (0001 + 0201)
+        raw_sid = info.getInfo(iServiceInformation.sSID)
+        raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
+        
+        hex_sid = "%04X" % (raw_sid & 0xFFFF)
+        hex_vpid = "%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000"
+        
+        combined_id = hex_sid + hex_vpid
+        
+        if self.save_biss_key(combined_id, key, info.getName()):
+            self.res = (True, f"Saved: {combined_id}")
         else:
             self.res = (False, "Write Error")
         self.timer.start(100, True)
@@ -134,13 +138,19 @@ class BISSPro(Screen):
         try:
             info = service.info()
             raw_sid = info.getInfo(iServiceInformation.sSID)
+            raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
+            
             hex_sid = "%04X" % (raw_sid & 0xFFFF)
+            hex_vpid = "%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000"
+            combined_id = hex_sid + hex_vpid
             
             raw_data = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
-            # بحث مرن عن الـ SID في النص
+            # نبحث بالـ SID (أول 4 أرقام) في الملف أونلاين
             m = re.search(hex_sid + r'.*?([0-9A-Fa-f]{16})', raw_data, re.I)
-            if m and self.save_biss_key(hex_sid, m.group(1), info.getName()):
-                self.res = (True, f"Auto Saved: {hex_sid}")
+            
+            # عند الحفظ نستخدم الـ combined_id (8 أرقام)
+            if m and self.save_biss_key(combined_id, m.group(1), info.getName()):
+                self.res = (True, f"Auto Saved: {combined_id}")
             else:
                 self.res = (False, f"Not Found: {hex_sid}")
         except: self.res = (False, "Server Error")
@@ -189,4 +199,4 @@ class HexInputScreen(Screen):
         else: self.session.open(MessageBox, "16 digits required!", MessageBox.TYPE_ERROR)
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v2.7", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v2.8 (SID+VPID)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
