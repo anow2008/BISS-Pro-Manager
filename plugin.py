@@ -9,21 +9,24 @@ from Components.ProgressBar import ProgressBar
 from Components.MultiContent import MultiContentEntryPixmapAlphaTest, MultiContentEntryText
 from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_HALIGN_LEFT, RT_VALIGN_CENTER
 from Tools.LoadPixmap import LoadPixmap
-from threading import Thread, Lock
+from threading import Thread
 from urllib.request import urlopen, urlretrieve
 import os, re, shutil
 
-# المسارات المحتملة لملف الشفرات
-POSSIBLE_PATHS = [
-    "/etc/tuxbox/config/oscam/SoftCam.Key",
-    "/etc/tuxbox/config/ncam/SoftCam.Key",
-    "/etc/tuxbox/config/SoftCam.Key",
-    "/usr/keys/SoftCam.Key"
-]
+# البحث عن مسار ملف الشفرات الحقيقي
+def get_softcam_path():
+    paths = [
+        "/etc/tuxbox/config/oscam/SoftCam.Key",
+        "/etc/tuxbox/config/ncam/SoftCam.Key",
+        "/etc/tuxbox/config/SoftCam.Key",
+        "/usr/keys/SoftCam.Key"
+    ]
+    for p in paths:
+        if os.path.exists(p): return p
+    return "/etc/tuxbox/config/SoftCam.Key"
 
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
 ICON_PATH = os.path.join(PLUGIN_PATH, "icons")
-lock = Lock()
 
 class AutoScale:
     def __init__(self):
@@ -37,7 +40,7 @@ class BISSPro(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v2.5">
+        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v2.6">
             <widget name="menu" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(1060)},{self.ui.px(550)}" itemHeight="{self.ui.px(110)}" scrollbarMode="showOnDemand" transparent="1"/>
             <eLabel position="{self.ui.px(50)},{self.ui.px(600)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             <widget name="progress" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(15)}" transparent="1" />
@@ -65,47 +68,43 @@ class BISSPro(Screen):
         self["menu"].l.setList(lst)
         if hasattr(self["menu"].l, 'setFont'): self["menu"].l.setFont(0, gFont("Regular", self.ui.font(32)))
 
-    def get_active_softcam_path(self):
-        for path in POSSIBLE_PATHS:
-            if os.path.exists(path): return path
-        # إذا لم يجد أي ملف، سينشئ واحداً في المسار الافتراضي لأوسكام
-        default = "/etc/tuxbox/config/oscam/SoftCam.Key"
-        dir_path = os.path.dirname(default)
-        if not os.path.exists(dir_path): os.makedirs(dir_path, exist_ok=True)
-        return default
-
-    def save_key(self, sid, key, name):
-        target_file = self.get_active_softcam_path()
+    def save_biss_key(self, sid, key, name):
+        target = get_softcam_path()
+        sid = sid.upper()
+        key = key.upper()
         try:
-            with lock:
-                lines = []
-                if os.path.exists(target_file):
-                    with open(target_file, "r") as f: lines = f.readlines()
-                
-                new_line = f"F {sid.upper()} 00000000 {key.upper()} ;{name}\n"
-                found = False
-                with open(target_file, "w") as f:
-                    for l in lines:
-                        if sid.upper() in l.upper() and l.strip().startswith("F"):
-                            f.write(new_line); found = True
-                        else: f.write(l)
-                    if not found: f.write(new_line)
+            # 1. التأكد من وجود الملف وتصريحه
+            if not os.path.exists(target):
+                os.system(f'touch {target}')
+            os.system(f'chmod 644 {target}')
+
+            # 2. حذف السطر القديم إذا وجد (بناءً على الـ SID) لتجنب التكرار
+            os.system(f"sed -i '/F {sid}/d' {target}")
+
+            # 3. إضافة السطر الجديد في نهاية الملف
+            new_entry = f"F {sid} 00000000 {key} ;{name}"
+            os.system(f'echo "{new_entry}" >> {target}')
             
-            os.chmod(target_file, 0o644) # إعطاء تصريح القراءة والكتابة للملف
+            # 4. تحديث الكام
             os.system("killall -HUP oscam ncam >/dev/null 2>&1")
             return True
-        except Exception as e:
-            print(f"[BissPro] Error saving: {str(e)}")
+        except:
             return False
 
     def ok(self):
-        curr = self["menu"].getCurrent(); action = curr[0] if curr else None
+        curr = self["menu"].getCurrent()
+        action = curr[0] if curr else None
         service = self.session.nav.getCurrentService()
-        if action == "add": self.session.openWithCallback(self.manual_done, HexInputScreen)
+        if action == "add":
+            self.session.openWithCallback(self.manual_done, HexInputScreen)
         elif action in ["upd", "auto"]:
             self["progress"].setValue(30)
-            if action == "upd": self["status"].setText("Updating SoftCam..."); Thread(target=self.do_update).start()
-            else: self["status"].setText("Searching Online..."); Thread(target=self.do_auto, args=(service,)).start()
+            if action == "upd":
+                self["status"].setText("Updating...")
+                Thread(target=self.do_update).start()
+            else:
+                self["status"].setText("Searching Online...")
+                Thread(target=self.do_auto, args=(service,)).start()
 
     def manual_done(self, key=None):
         if not key: return
@@ -113,16 +112,19 @@ class BISSPro(Screen):
         if not service: return
         info = service.info()
         sid = "%08X" % info.getInfo(iServiceInformation.sSID)
-        if self.save_key(sid, key, info.getName()): self.res = (True, "Success: Key Registered")
-        else: self.res = (False, "Error: Check File Permissions")
+        if self.save_biss_key(sid, key, info.getName()):
+            self.res = (True, "Success: Key Saved!")
+        else:
+            self.res = (False, "Failed to Write File")
         self.timer.start(100, True)
 
     def do_update(self):
         try:
             urlretrieve("https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key", "/tmp/SoftCam.Key")
-            shutil.copy("/tmp/SoftCam.Key", self.get_active_softcam_path())
-            self.res = (True, "SoftCam Updated!")
-        except: self.res = (False, "Update Failed")
+            shutil.copy("/tmp/SoftCam.Key", get_softcam_path())
+            os.system(f"chmod 644 {get_softcam_path()}")
+            self.res = (True, "SoftCam Updated")
+        except: self.res = (False, "Download Error")
         self.timer.start(100, True)
 
     def do_auto(self, service):
@@ -130,9 +132,10 @@ class BISSPro(Screen):
             info = service.info(); sid = "%08X" % info.getInfo(iServiceInformation.sSID)
             raw = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
             m = re.search(sid + r'.*?([0-9A-Fa-f]{16})', raw, re.I)
-            if m and self.save_key(sid, m.group(1), info.getName()): self.res = (True, f"Found & Saved: {m.group(1)}")
-            else: self.res = (False, "Key Not Found Online")
-        except: self.res = (False, "Server Connection Error")
+            if m and self.save_biss_key(sid, m.group(1), info.getName()):
+                self.res = (True, f"Key Found: {m.group(1)}")
+            else: self.res = (False, "Not Found Online")
+        except: self.res = (False, "Server Error")
         self.timer.start(100, True)
 
     def show_result(self):
@@ -164,7 +167,6 @@ class HexInputScreen(Screen):
             "0": lambda: self.keyNum("0"), "1": lambda: self.keyNum("1"), "2": lambda: self.keyNum("2"), "3": lambda: self.keyNum("3"),
             "4": lambda: self.keyNum("4"), "5": lambda: self.keyNum("5"), "6": lambda: self.keyNum("6"), "7": lambda: self.keyNum("7"),
             "8": lambda: self.keyNum("8"), "9": lambda: self.keyNum("9")}, -1)
-
     def update_label(self):
         d = self.key + "_" * (16 - len(self.key))
         self["keylabel"].setText(" ".join([d[i:i+4] for i in range(0, 16, 4)]))
@@ -179,4 +181,4 @@ class HexInputScreen(Screen):
         else: self.session.open(MessageBox, "16 digits required!", MessageBox.TYPE_ERROR)
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v2.5", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v2.6", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
