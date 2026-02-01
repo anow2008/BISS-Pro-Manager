@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # =========================================================
-# BissPro Manager – OpenATV – Progress Version
+# BissPro Manager – OpenATV – STABLE FINAL
 # =========================================================
 
 from Plugins.Plugin import PluginDescriptor
@@ -58,58 +58,78 @@ def download(url, dest):
 # ================= Manual Input =================
 class EasyBissInput(Screen):
     skin = """
-    <screen position="center,center" size="900,360" title="Manual BISS Key">
-        <widget name="key" position="40,80" size="820,90"
-            font="Console;48" halign="center" valign="center"
-            parse="True"/>
-        <widget name="hexlist" position="390,190" size="120,140"/>
-        <widget name="status" position="40,300" size="820,40"
-            font="Regular;22" halign="center"
-            foregroundColor="#ffffff"/>
+    <screen position="center,center" size="950,320" title="Manual BISS Key">
+
+        <!-- 16 HEX boxes -->
+        <widget name="k0"  position="80,80"  size="40,60"/>
+        <widget name="k1"  position="130,80" size="40,60"/>
+        <widget name="k2"  position="180,80" size="40,60"/>
+        <widget name="k3"  position="230,80" size="40,60"/>
+
+        <widget name="k4"  position="300,80" size="40,60"/>
+        <widget name="k5"  position="350,80" size="40,60"/>
+        <widget name="k6"  position="400,80" size="40,60"/>
+        <widget name="k7"  position="450,80" size="40,60"/>
+
+        <widget name="k8"  position="520,80" size="40,60"/>
+        <widget name="k9"  position="570,80" size="40,60"/>
+        <widget name="k10" position="620,80" size="40,60"/>
+        <widget name="k11" position="670,80" size="40,60"/>
+
+        <widget name="k12" position="740,80" size="40,60"/>
+        <widget name="k13" position="790,80" size="40,60"/>
+        <widget name="k14" position="840,80" size="40,60"/>
+        <widget name="k15" position="890,80" size="40,60"/>
+
+        <widget name="hexlist" position="415,170" size="120,120"/>
     </screen>
     """
 
     def __init__(self, session, sid, mode="add", old=None, name="Channel"):
         Screen.__init__(self, session)
+
         self.sid = sid
         self.mode = mode
         self.old = old
         self.name = name
-        self.key = list("0000000000000000")
-        self.pos = 0
 
+        self.key = list("0000000000000000")
         if old:
             self.key = list(old.split()[3])
 
-        self["key"] = Label("")
-        self["status"] = Label("Enter key")
+        self.pos = 0
+        self.labels = []
+
+        for i in range(16):
+            self["k%d" % i] = Label("0")
+            self["k%d" % i].instance.setFont(self["k%d" % i].instance.getFont())
+            self.labels.append(self["k%d" % i])
+
         self["hexlist"] = MenuList([(c, c) for c in "ABCDEF"])
 
         self["actions"] = ActionMap(
-            ["DirectionActions", "NumberActions", "ColorActions", "OkCancelActions"],
+            ["DirectionActions", "NumberActions", "OkCancelActions"],
             {
                 "left": self.left,
                 "right": self.right,
-                "up": self["hexlist"].up,
-                "down": self["hexlist"].down,
                 "ok": self.pick_hex,
                 "green": self.save,
                 "cancel": self.close,
                 **{str(i): (lambda x=str(i): self.set_num(x)) for i in range(10)}
             }, -1
         )
+
         self.refresh()
 
     def refresh(self):
-        txt = ""
-        for i, c in enumerate(self.key):
-            if i % 4 == 0:
-                txt += "  "
+        for i in range(16):
+            self.labels[i].setText(self.key[i])
             if i == self.pos:
-                txt += '<span backgroundColor="#0059b3" foregroundColor="#ffffff"> %s </span>' % c
+                self.labels[i].instance.setBackgroundColor(0x0059B3)
+                self.labels[i].instance.setForegroundColor(0xFFFFFF)
             else:
-                txt += '<span foregroundColor="#ffffff"> %s </span>' % c
-        self["key"].setText(txt)
+                self.labels[i].instance.setBackgroundColor(0x000000)
+                self.labels[i].instance.setForegroundColor(0xFFFFFF)
 
     def left(self):
         self.pos = (self.pos - 1) % 16
@@ -130,16 +150,17 @@ class EasyBissInput(Screen):
             self.right()
 
     def save(self):
-        self["status"].setText("Saving...")
         new = "F %s 00000000 %s ;%s" % (
             self.sid, "".join(self.key), self.name
         )
+
         with open(BISS_FILE, "w") as f:
             for l in read_keys():
                 if self.mode == "edit" and l == self.old:
                     continue
                 f.write(l + "\n")
             f.write(new + "\n")
+
         restartSoftcam()
         self.close()
 
@@ -151,11 +172,8 @@ class BISSPro(Screen):
             selectionBackgroundColor="#0059b3"
             selectionForegroundColor="#ffffff"/>
         <widget name="status" position="100,470" size="900,30"
-            font="Regular;22" halign="center"
-            foregroundColor="#ffffff"/>
-        <widget name="progress" position="100,510" size="900,18"
-            backgroundColor="#2b2b2b"
-            foregroundColor="#0059b3"/>
+            font="Regular;22" halign="center"/>
+        <widget name="progress" position="100,510" size="900,18"/>
     </screen>
     """
 
@@ -237,7 +255,7 @@ def main(session, **kwargs):
 def Plugins(**kwargs):
     return [PluginDescriptor(
         name=PLUGIN_NAME,
-        description="BISS Manager with Progress",
+        description="BISS Manager Stable",
         where=PluginDescriptor.WHERE_PLUGINMENU,
         icon="icon.png",
         fnc=main
