@@ -1,0 +1,58 @@
+<skin>
+
+    <!-- ================= MAIN MENU ================= -->
+    <screen name="BISSPro" position="center,center" size="1000,580" title="BissPro Manager">
+        <widget name="menu"
+            position="100,80"
+            size="800,360"
+            font="Regular;28"
+            itemHeight="60"
+            selectionBackgroundColor="#0059b3"
+            selectionForegroundColor="#ffffff" />
+
+        <widget name="status"
+            position="100,460"
+            size="800,30"
+            font="Regular;22"
+            halign="center" />
+
+        <widget name="progress"
+            position="100,500"
+            size="800,18"
+            backgroundColor="#202020"
+            foregroundColor="#0059b3" />
+    </screen>
+
+
+    <!-- ================= BISS INPUT ================= -->
+    <screen name="EasyBissInput" position="center,center" size="900,320" title="Manual BISS Key">
+
+        <!-- 16 HEX boxes -->
+        <widget name="k0"  position="80,90"  size="40,60" font="Console;42" halign="center" />
+        <widget name="k1"  position="130,90" size="40,60" font="Console;42" halign="center" />
+        <widget name="k2"  position="180,90" size="40,60" font="Console;42" halign="center" />
+        <widget name="k3"  position="230,90" size="40,60" font="Console;42" halign="center" />
+
+        <widget name="k4"  position="300,90" size="40,60" font="Console;42" halign="center" />
+        <widget name="k5"  position="350,90" size="40,60" font="Console;42" halign="center" />
+        <widget name="k6"  position="400,90" size="40,60" font="Console;42" halign="center" />
+        <widget name="k7"  position="450,90" size="40,60" font="Console;42" halign="center" />
+
+        <widget name="k8"  position="520,90" size="40,60" font="Console;42" halign="center" />
+        <widget name="k9"  position="570,90" size="40,60" font="Console;42" halign="center" />
+        <widget name="k10" position="620,90" size="40,60" font="Console;42" halign="center" />
+        <widget name="k11" position="670,90" size="40,60" font="Console;42" halign="center" />
+
+        <widget name="k12" position="740,90" size="40,60" font="Console;42" halign="center" />
+        <widget name="k13" position="790,90" size="40,60" font="Console;42" halign="center" />
+        <widget name="k14" position="840,90" size="40,60" font="Console;42" halign="center" />
+        <widget name="k15" position="890,90" size="40,60" font="Console;42" halign="center" />
+
+        <!-- HEX letters -->
+        <widget name="hexlist"
+            position="400,180"
+            size="120,120"
+            font="Regular;26" />
+    </screen>
+
+</skin>
