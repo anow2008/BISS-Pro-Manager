@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # =========================================================
-# BissPro Manager – Python 3 – FHD – BLUE UI
+# BissPro Manager – Python 3 – FHD – BLUE UI – CLEAN STATUS
 # =========================================================
 
 from Plugins.Plugin import PluginDescriptor
@@ -65,12 +65,10 @@ def download(url, dest):
 # ================= Manual BISS Input =================
 class EasyBissInput(Screen):
     skin = """
-    <screen position="center,center" size="900,360" title="Manual BISS Entry">
+    <screen position="center,center" size="900,360" title="Manual BISS Key">
         <widget name="key" position="40,60" size="820,90"
             font="Console;52" halign="center" valign="center"/>
-        <widget name="help" position="40,160" size="820,40"
-            font="Regular;24" halign="center"/>
-        <widget name="hexlist" position="390,210" size="120,130"/>
+        <widget name="hexlist" position="390,190" size="120,150"/>
         <widget name="buttons" position="40,310" size="820,40"
             font="Regular;22" halign="center"/>
     </screen>
@@ -89,8 +87,7 @@ class EasyBissInput(Screen):
             self.key = list(old.split()[3])
 
         self["key"] = Label("")
-        self["help"] = Label("◀ ▶ تنقل | أرقام من الريموت | ▲ ▼ اختر A-F | OK اختيار")
-        self["buttons"] = Label("🟢 حفظ    🔴 خروج")
+        self["buttons"] = Label("GREEN = Save    RED = Exit")
         self["hexlist"] = MenuList([(c, c) for c in "ABCDEF"])
 
         self["actions"] = ActionMap(
@@ -110,13 +107,14 @@ class EasyBissInput(Screen):
 
         self.refresh()
 
+    # 🔵 Clear & Visible Input
     def refresh(self):
         txt = ""
         for i, c in enumerate(self.key):
             if i == self.pos:
-                txt += "\x1b[34m[%s]\x1b[0m" % c
+                txt += "\x1b[44m\x1b[97m %s \x1b[0m" % c   # Active
             else:
-                txt += "\x1b[36m %s \x1b[0m" % c
+                txt += "\x1b[37m %s \x1b[0m" % c          # Normal
         self["key"].setText(txt)
 
     def left(self):
@@ -195,13 +193,16 @@ class BISSPro(Screen):
             ("Import BISS from biss.txt", "import"),
         ])
         self["menu"].l.setItemHeight(60)
-        self["status"] = Label("BLUE UI READY")
+        self["status"] = Label("Ready")
 
         self["actions"] = ActionMap(
             ["OkCancelActions"],
             {"ok": self.ok, "cancel": self.close},
             -1
         )
+
+    def setStatus(self, txt):
+        self["status"].setText(txt)
 
     def ok(self):
         sel = self["menu"].getCurrent()[1]
@@ -211,26 +212,31 @@ class BISSPro(Screen):
         name = info.getName().replace(" ", "_") if info else "Channel"
 
         if sel == "add":
+            self.setStatus("Opening manual input...")
             self.session.open(EasyBissInput, sid, "add", None, name)
 
         elif sel == "edit":
+            self.setStatus("Loading key...")
             old = find_key_by_sid(sid)
             if old:
                 self.session.open(EasyBissInput, sid, "edit", old, name)
 
         elif sel == "delete":
+            self.setStatus("Deleting key...")
             old = find_key_by_sid(sid)
             if old:
                 write_keys([l for l in read_keys() if l != old])
                 restartSoftcam()
-                self.session.open(MessageBox, "BISS Deleted", MessageBox.TYPE_INFO, 3)
+                self.setStatus("Key deleted")
 
         elif sel == "update":
+            self.setStatus("Updating SoftCam.Key...")
             if download(UPDATE_URL, BISS_FILE):
                 restartSoftcam()
-                self.session.open(MessageBox, "SoftCam.Key Updated", MessageBox.TYPE_INFO, 3)
+                self.setStatus("Update completed")
 
         elif sel == "import":
+            self.setStatus("Importing BISS keys...")
             tmp = "/tmp/biss.txt"
             if download(BISS_TXT_URL, tmp):
                 with open(BISS_FILE, "a") as out, open(tmp) as inp:
@@ -238,7 +244,7 @@ class BISSPro(Screen):
                         if l.startswith("F "):
                             out.write(l)
                 restartSoftcam()
-                self.session.open(MessageBox, "BISS Imported", MessageBox.TYPE_INFO, 3)
+                self.setStatus("Import completed")
 
 # ================= Entry =================
 def main(session, **kwargs):
