@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 # =========================================================
-# BissPro Manager – OpenATV – STABLE FINAL
+# BissPro Manager – FINAL STABLE – OpenATV
 # =========================================================
 
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
+from Screens.MessageBox import MessageBox
 from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
@@ -43,8 +44,10 @@ def read_keys():
     return [l.strip() for l in open(BISS_FILE, "r", errors="ignore") if l.startswith("F ")]
 
 def find_key_by_sid(sid):
+    sid4 = sid[-4:].upper()
     for l in read_keys():
-        if l.split()[1] == sid:
+        parts = l.split()
+        if len(parts) > 3 and parts[1].upper() == sid4:
             return l
     return None
 
@@ -58,39 +61,26 @@ def download(url, dest):
 # ================= Manual Input =================
 class EasyBissInput(Screen):
     skin = """
-    <screen position="center,center" size="950,320" title="Manual BISS Key">
-
-        <!-- 16 HEX boxes -->
-        <widget name="k0"  position="80,80"  size="40,60"/>
-        <widget name="k1"  position="130,80" size="40,60"/>
-        <widget name="k2"  position="180,80" size="40,60"/>
-        <widget name="k3"  position="230,80" size="40,60"/>
-
-        <widget name="k4"  position="300,80" size="40,60"/>
-        <widget name="k5"  position="350,80" size="40,60"/>
-        <widget name="k6"  position="400,80" size="40,60"/>
-        <widget name="k7"  position="450,80" size="40,60"/>
-
-        <widget name="k8"  position="520,80" size="40,60"/>
-        <widget name="k9"  position="570,80" size="40,60"/>
-        <widget name="k10" position="620,80" size="40,60"/>
-        <widget name="k11" position="670,80" size="40,60"/>
-
-        <widget name="k12" position="740,80" size="40,60"/>
-        <widget name="k13" position="790,80" size="40,60"/>
-        <widget name="k14" position="840,80" size="40,60"/>
-        <widget name="k15" position="890,80" size="40,60"/>
-
-        <widget name="hexlist" position="415,170" size="120,120"/>
+    <screen position="center,center" size="900,300" title="Manual BISS Key">
+        <widget name="key"
+            position="50,90"
+            size="800,70"
+            font="Console;42"
+            halign="center"
+            valign="center"
+            parse="True"/>
+        <widget name="hexlist"
+            position="400,180"
+            size="100,100"/>
     </screen>
     """
 
     def __init__(self, session, sid, mode="add", old=None, name="Channel"):
         Screen.__init__(self, session)
 
-        self.sid = sid
+        self.sid  = sid
         self.mode = mode
-        self.old = old
+        self.old  = old
         self.name = name
 
         self.key = list("0000000000000000")
@@ -98,13 +88,8 @@ class EasyBissInput(Screen):
             self.key = list(old.split()[3])
 
         self.pos = 0
-        self.labels = []
 
-        for i in range(16):
-            self["k%d" % i] = Label("0")
-            self["k%d" % i].instance.setFont(self["k%d" % i].instance.getFont())
-            self.labels.append(self["k%d" % i])
-
+        self["key"] = Label("")
         self["hexlist"] = MenuList([(c, c) for c in "ABCDEF"])
 
         self["actions"] = ActionMap(
@@ -122,14 +107,14 @@ class EasyBissInput(Screen):
         self.refresh()
 
     def refresh(self):
+        txt = ""
         for i in range(16):
-            self.labels[i].setText(self.key[i])
+            c = self.key[i]
             if i == self.pos:
-                self.labels[i].instance.setBackgroundColor(0x0059B3)
-                self.labels[i].instance.setForegroundColor(0xFFFFFF)
+                txt += '<span backgroundColor="#0059b3" foregroundColor="#ffffff"> %s </span>' % c
             else:
-                self.labels[i].instance.setBackgroundColor(0x000000)
-                self.labels[i].instance.setForegroundColor(0xFFFFFF)
+                txt += '<span foregroundColor="#ffffff"> %s </span>' % c
+        self["key"].setText(txt)
 
     def left(self):
         self.pos = (self.pos - 1) % 16
@@ -151,7 +136,7 @@ class EasyBissInput(Screen):
 
     def save(self):
         new = "F %s 00000000 %s ;%s" % (
-            self.sid, "".join(self.key), self.name
+            self.sid[-4:], "".join(self.key), self.name
         )
 
         with open(BISS_FILE, "w") as f:
@@ -162,18 +147,19 @@ class EasyBissInput(Screen):
             f.write(new + "\n")
 
         restartSoftcam()
+        self.session.open(MessageBox, "Key Saved", MessageBox.TYPE_INFO, 3)
         self.close()
 
 # ================= Main Screen =================
 class BISSPro(Screen):
     skin = """
-    <screen position="center,center" size="1100,620" title="BissPro Manager">
-        <widget name="menu" position="100,90" size="900,360"
+    <screen position="center,center" size="1000,580" title="BissPro Manager">
+        <widget name="menu" position="100,80" size="800,350"
             selectionBackgroundColor="#0059b3"
             selectionForegroundColor="#ffffff"/>
-        <widget name="status" position="100,470" size="900,30"
-            font="Regular;22" halign="center"/>
-        <widget name="progress" position="100,510" size="900,18"/>
+        <widget name="status" position="100,450" size="800,30"
+            halign="center"/>
+        <widget name="progress" position="100,490" size="800,18"/>
     </screen>
     """
 
@@ -205,6 +191,7 @@ class BISSPro(Screen):
 
     def ok(self):
         sel = self["menu"].getCurrent()[1]
+
         service = self.session.nav.getCurrentService()
         info = service.info() if service else None
         sid = "%08X" % info.getInfo(iServiceInformation.sSID) if info else ""
@@ -217,6 +204,8 @@ class BISSPro(Screen):
             old = find_key_by_sid(sid)
             if old:
                 self.session.open(EasyBissInput, sid, "edit", old, name)
+            else:
+                self.session.open(MessageBox, "No key for this channel", MessageBox.TYPE_INFO, 3)
 
         elif sel == "delete":
             self.setProgress("Deleting...", 50)
