@@ -6,14 +6,14 @@ from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
 from Components.MultiContent import MultiContentEntryPixmapAlphaTest, MultiContentEntryText
-from enigma import iServiceInformation, gFont, eTimer, RT_VALIGN_CENTER, eServiceReference
+from enigma import iServiceInformation, gFont, eTimer, RT_VALIGN_CENTER
 from Tools.LoadPixmap import LoadPixmap
 from threading import Thread
 import os, re, shutil
 try:
-    from urllib.request import urlopen
+    from urllib.request import urlopen, Request
 except ImportError:
-    from urllib2 import urlopen
+    from urllib2 import urlopen, Request
 
 PLUGIN_PATH = os.path.dirname(__file__)
 ICON_PATH = os.path.join(PLUGIN_PATH, "icons")
@@ -28,7 +28,7 @@ class BISSPro(Screen):
     def __init__(self, session):
         Screen.__init__(self, session)
         self.skin = """
-        <screen position="center,center" size="1100,750" title="BissPro Manager v4.1 (Deep Match)">
+        <screen position="center,center" size="1100,750" title="BissPro Manager v4.2 (Final Match)">
             <widget name="menu" position="20,20" size="1060,550" itemHeight="110" transparent="1"/>
             <eLabel position="50,600" size="1000,2" backgroundColor="#444444" />
             <widget name="status" position="50,650" size="1000,60" font="Regular;30" halign="center" valign="center" transparent="1" foregroundColor="#3498db"/>
@@ -74,10 +74,9 @@ class BISSPro(Screen):
 
     def ok(self):
         curr = self["menu"].getCurrent()
-        if curr and curr[0] == "add": 
-            self.session.openWithCallback(self.manual_done, HexInputScreen)
+        if curr and curr[0] == "add": self.session.openWithCallback(self.manual_done, HexInputScreen)
         elif curr and curr[0] == "auto":
-            self["status"].setText("Matching Name & Frequency Online...")
+            self["status"].setText("Searching Online...")
             Thread(target=self.do_auto).start()
 
     def manual_done(self, key=None):
@@ -92,27 +91,25 @@ class BISSPro(Screen):
             service = self.session.nav.getCurrentService()
             info = service.info()
             
-            # 1. جلب بيانات القناة الحالية بدقة
-            current_name = info.getName().upper().replace(" ", "")
-            raw_sid = info.getInfo(iServiceInformation.sSID) & 0xFFFF
-            sid_hex = "%04X" % raw_sid
+            # بيانات القناة الحالية
+            c_name = info.getName().upper().replace(" ", "")
+            sid_hex = "%04X" % (info.getInfo(iServiceInformation.sSID) & 0xFFFF)
             
-            # جلب التردد
             tp_info = info.getInfoObject(iServiceInformation.sTransponderData)
-            current_freq = str(tp_info.get("frequency", 0))[:5] # أول 5 أرقام من التردد (مثل 11678)
+            freq = str(tp_info.get("frequency", 0))[:4] # نأخذ أول 4 أرقام للتردد لضمان المطابقة المرنة (مثل 1167)
 
-            # 2. تحميل ملف البيانات
+            # طلب الملف مع User-Agent لمنع الحجب
             url = "https://raw.githubusercontent.com/anow2008/softcam.key/main/biss.txt"
-            data = urlopen(url, timeout=10).read().decode("utf-8")
+            req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            data = urlopen(req, timeout=10).read().decode("utf-8")
             
-            # 3. البحث الذكي (مطابقة الاسم والتردد والـ SID)
             found_key = None
-            lines = data.split('\n')
-            for line in lines:
-                if sid_hex in line.upper():
-                    # التحقق من وجود التردد أو اسم القناة في نفس السطر لضمان المطابقة
-                    if current_freq in line or current_name in line.upper().replace(" ", ""):
-                        # استخراج الشفرة (16 حرف هيكسا)
+            for line in data.splitlines():
+                line_up = line.upper()
+                # شرط البحث: الـ SID يجب أن يكون موجوداً
+                if sid_hex in line_up:
+                    # مطابقة إضافية بالتردد أو الاسم
+                    if freq in line_up or c_name in line_up.replace(" ", ""):
                         match = re.search(r'([0-9A-Fa-f]{16})', line)
                         if match:
                             found_key = match.group(1)
@@ -120,9 +117,9 @@ class BISSPro(Screen):
             
             if found_key:
                 res_id = self.unified_save(found_key, info.getName())
-                self.res = (True, "Matched & Added!\nName: %s\nID: %s" % (info.getName(), res_id))
+                self.res = (True, "Success matched!\nID: %s\nKey: %s" % (res_id, found_key))
             else:
-                self.res = (False, "No Match Found for %s (%s)" % (info.getName(), current_freq))
+                self.res = (False, "No match found for SID %s" % sid_hex)
                 
         except Exception as e:
             self.res = (False, "Error: %s" % str(e))
@@ -136,16 +133,16 @@ class HexInputScreen(Screen):
     def __init__(self, session):
         Screen.__init__(self, session)
         self.skin = """
-        <screen position="center,center" size="900,550" title="BISS Manual Input" backgroundColor="#121212">
+        <screen position="center,center" size="900,550" title="BISS Input" backgroundColor="#121212">
             <eLabel position="0,0" size="900,80" backgroundColor="#3498db" zPosition="-1" />
             <widget name="keylabel" position="60,110" size="780,90" font="Regular;60" halign="center" valign="center" foregroundColor="#3498db" backgroundColor="#1f1f1f" transparent="0" />
             <widget name="hexlist" position="350,230" size="200,220" itemHeight="70" font="Regular;50" selectionColor="#3498db" transparent="1" />
-            <ePixmap pixmap="skin_default/buttons/green.png" position="375,480" size="30,30" alphatest="on" />
-            <widget name="key_green" position="415,480" size="150,30" font="Regular;22" />
+            <ePixmap pixmap="skin_default/buttons/green.png" position="415,480" size="30,30" alphatest="on" />
+            <widget name="key_green" position="455,480" size="150,30" font="Regular;22" />
         </screen>"""
         self.key = ""
         self["keylabel"] = Label("")
-        self["key_green"] = Label("Save Key")
+        self["key_green"] = Label("Save")
         self["hexlist"] = MenuList(["A", "B", "C", "D", "E", "F"])
         self["actions"] = ActionMap(["OkCancelActions", "NumberActions", "DirectionActions", "ColorActions"], {
             "ok": self.add_from_list, "cancel": self.close, "green": self.save,
@@ -167,7 +164,7 @@ class HexInputScreen(Screen):
 
     def save(self):
         if len(self.key) == 16: self.close(self.key)
-        else: self.session.open(MessageBox, "16 digits required!", MessageBox.TYPE_ERROR)
+        else: self.session.open(MessageBox, "Need 16 chars!", MessageBox.TYPE_ERROR)
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="v4.1 Match Freq/Name", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="v4.2 Final Stable", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
