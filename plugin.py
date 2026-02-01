@@ -13,38 +13,71 @@ from threading import Thread, Lock
 from urllib.request import urlopen, urlretrieve
 import os, re, shutil, subprocess
 
-PLUGIN_NAME = "BissPro"
+# ==============================
+# Plugin Constants
+# ==============================
+PLUGIN_NAME    = "BissPro"
 PLUGIN_VERSION = "1.0"
-PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
-ICON_PATH = PLUGIN_PATH + "/icons/"
-PLUGIN_ICON = ICON_PATH + "plugin.png"
-UPDATE_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
-BISS_TXT_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt"
+PLUGIN_PATH    = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
+ICON_PATH      = PLUGIN_PATH + "/icons/"
+PLUGIN_ICON    = ICON_PATH + "plugin.png"
+UPDATE_URL     = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
+BISS_TXT_URL   = "https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt"
 
 lock = Lock()
 
-# ======== Auto Scale ========
+# ==============================
+# Auto Scale Utility
+# ==============================
 class AutoScale:
     BASE_W = 1920.0
     BASE_H = 1080.0
+
     def __init__(self):
         d = getDesktop(0).size()
         self.w = d.width()
         self.h = d.height()
         self.scale = min(self.w / self.BASE_W, self.h / self.BASE_H)
-    def px(self, v): return int(v * self.scale)
-    def font(self, v): return int(max(18, v * self.scale))
 
-# ======== Utils ========
+    def px(self, v):
+        return int(v * self.scale)
+
+    def font(self, v):
+        return int(max(18, v * self.scale))
+
+# ==============================
+# BISS Key File Utilities
+# ==============================
 def get_key_path():
-    paths = ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key", "/usr/keys/SoftCam.Key"]
+    paths = [
+        "/etc/tuxbox/config/oscam/SoftCam.Key",
+        "/etc/tuxbox/config/SoftCam.Key",
+        "/usr/keys/SoftCam.Key"
+    ]
     for p in paths:
-        if os.path.exists(p): return p
+        if os.path.exists(p):
+            return p
     return "/etc/tuxbox/config/SoftCam.Key"
 
 BISS_FILE = get_key_path()
 
+def ensure_biss_file():
+    """Ensure SoftCam.Key exists and is writable."""
+    if not os.path.exists(BISS_FILE):
+        try:
+            os.makedirs(os.path.dirname(BISS_FILE), exist_ok=True)
+            with open(BISS_FILE, "w", encoding="utf-8") as f:
+                f.write("")
+        except Exception as e:
+            print("Cannot create SoftCam.Key:", e)
+            return False
+    if not os.access(BISS_FILE, os.W_OK):
+        print("No write permission for SoftCam.Key")
+        return False
+    return True
+
 def extract_biss_key_from_block(block):
+    """Extract 16-char BISS key from a 4-line block."""
     if len(block) < 4:
         return None
     raw_key_line = block[3]
@@ -54,21 +87,15 @@ def extract_biss_key_from_block(block):
         return ''.join(parts).upper()
     return None
 
-def restart_softcam():
-    softcams = ["oscam", "cccam", "mgcamd", "ncamd"]
-    for sc in softcams:
-        try:
-            subprocess.call(["killall", "-HUP", sc])
-        except Exception as e:
-            print(f"Restart {sc} failed:", e)
-
 def write_biss_key(sid, key, name):
+    """Write or update BISS key in SoftCam.Key."""
+    if not ensure_biss_file():
+        return False
     try:
         with lock:
             lines = []
-            if os.path.exists(BISS_FILE):
-                with open(BISS_FILE, "r") as f:
-                    lines = f.readlines()
+            with open(BISS_FILE, "r", encoding="utf-8") as f:
+                lines = f.readlines()
             new_lines = []
             sid_found = False
             for l in lines:
@@ -79,14 +106,25 @@ def write_biss_key(sid, key, name):
                     new_lines.append(l)
             if not sid_found:
                 new_lines.append(f"F {sid} 00000000 {key} ;{name}\n")
-            with open(BISS_FILE, "w") as f:
+            with open(BISS_FILE, "w", encoding="utf-8") as f:
                 f.writelines(new_lines)
         return True
     except Exception as e:
         print("Write BISS error:", e)
         return False
 
-# ======== Main Screen ========
+def restart_softcam():
+    """Restart common softcams."""
+    softcams = ["oscam", "cccam", "mgcamd", "ncamd"]
+    for sc in softcams:
+        try:
+            subprocess.call(["killall", "-HUP", sc])
+        except Exception as e:
+            print(f"Restart {sc} failed:", e)
+
+# ==============================
+# Main Plugin Screen
+# ==============================
 class BISSPro(Screen):
     def __init__(self, session):
         self.ui = AutoScale()
@@ -97,16 +135,26 @@ class BISSPro(Screen):
         </screen>"""
         Screen.__init__(self, session)
 
-        self.update_menu()
+        # Components
         self["status"] = Label("")
+        self.update_menu()
         self["actions"] = ActionMap(
             ["OkCancelActions","DirectionActions","NumberActions"],
-            {"ok": self.ok, "cancel": self.close, "up": self["menu"].up, "down": self["menu"].down},
+            {
+                "ok": self.ok,
+                "cancel": self.close,
+                "up": self["menu"].up,
+                "down": self["menu"].down
+            },
             -1
         )
+
         self.timer = eTimer()
         self.timer.callback.append(self.show_result)
 
+    # ------------------------------
+    # UI Updates
+    # ------------------------------
     def update_status(self, text):
         self["status"].setText(text)
 
@@ -118,13 +166,27 @@ class BISSPro(Screen):
         ]
         self.menu_list = []
         for t, a, p in items:
-            self.menu_list.append((a, [
-                MultiContentEntryPixmapAlphaTest(pos=(self.ui.px(10), self.ui.px(10)), size=(self.ui.px(100), self.ui.px(100)), png=LoadPixmap(p)),
-                MultiContentEntryText(pos=(self.ui.px(130), self.ui.px(30)), size=(self.ui.px(800), self.ui.px(60)), font=0, text=t)
-            ]))
+            self.menu_list.append(
+                (a, [
+                    MultiContentEntryPixmapAlphaTest(
+                        pos=(self.ui.px(10), self.ui.px(10)),
+                        size=(self.ui.px(100), self.ui.px(100)),
+                        png=LoadPixmap(p)
+                    ),
+                    MultiContentEntryText(
+                        pos=(self.ui.px(130), self.ui.px(30)),
+                        size=(self.ui.px(800), self.ui.px(60)),
+                        font=0,
+                        text=t
+                    )
+                ])
+            )
         self["menu"] = MenuList(self.menu_list)
         self["menu"].l.setFont(0, gFont("Regular", self.ui.font(32)))
 
+    # ------------------------------
+    # Menu Actions
+    # ------------------------------
     def ok(self):
         action = self["menu"].getCurrent()[0]
         service = self.session.nav.getCurrentService()
@@ -135,7 +197,9 @@ class BISSPro(Screen):
         elif action == "autoadd" and service:
             Thread(target=self.do_auto_add, args=(service,)).start()
 
-    # ===== Manual BISS Input with Number + Letter Selection =====
+    # ------------------------------
+    # Manual BISS Input
+    # ------------------------------
     def start_manual_input(self, service):
         self.input_key = ""
         self.current_service = service
@@ -144,7 +208,6 @@ class BISSPro(Screen):
 
     def show_letter_choice(self):
         if len(self.input_key) >= 16:
-            # 16 chars complete
             self.save_manual_key()
             return
         letters = ["A","B","C","D","E","F"]
@@ -155,10 +218,12 @@ class BISSPro(Screen):
             self.input_key += result
             display = self.input_key + "_"*(16-len(self.input_key))
             self.update_status(f"Key: {display}")
-        self.show_letter_choice()  # show choice again until 16 chars
+            self.show_letter_choice()
+        else:
+            self.update_status("Manual input canceled")
+            self.input_key = ""
 
     def keyNumberGlobal(self, number):
-        # called automatically on number press
         if hasattr(self, "input_key") and len(self.input_key) < 16:
             self.input_key += str(number)
             display = self.input_key + "_"*(16-len(self.input_key))
@@ -180,20 +245,28 @@ class BISSPro(Screen):
             self.res = (False, "Failed to write key")
         self.timer.start(100, True)
 
-    # ===== Update SoftCam.Key =====
+    # ------------------------------
+    # Update SoftCam.Key
+    # ------------------------------
     def do_upd(self):
         try:
-            self.update_status("Updating SoftCam.Key...")
-            urlretrieve(UPDATE_URL, "/tmp/S.Key")
-            shutil.copy("/tmp/S.Key", BISS_FILE)
-            self.update_status("Restarting SoftCam...")
-            restart_softcam()
-            self.res = (True, "SoftCam.Key updated successfully")
-        except:
+            if not ensure_biss_file():
+                self.res = (False, "Cannot write SoftCam.Key")
+            else:
+                self.update_status("Updating SoftCam.Key...")
+                urlretrieve(UPDATE_URL, "/tmp/S.Key")
+                shutil.copy("/tmp/S.Key", BISS_FILE)
+                self.update_status("Restarting SoftCam...")
+                restart_softcam()
+                self.res = (True, "SoftCam.Key updated successfully")
+        except Exception as e:
+            print("Update error:", e)
             self.res = (False, "Failed to update SoftCam.Key")
         self.timer.start(100, True)
 
-    # ===== Auto Add BISS =====
+    # ------------------------------
+    # Auto Add BISS
+    # ------------------------------
     def do_auto_add(self, service):
         try:
             self.update_status("Auto adding BISS key...")
@@ -208,16 +281,16 @@ class BISSPro(Screen):
 
             for i in range(0, len(lines), 4):
                 block = lines[i:i+4]
-                if len(block) < 4: continue
+                if len(block) < 4:
+                    continue
                 file_freq = re.sub(r'[^0-9]', '', block[1])
                 file_name = re.sub(r'[^A-Za-z0-9 ]', '', block[2])
                 if abs(freq - int(file_freq)) <= 2 and name.replace(" ","") == file_name.replace(" ",""):
                     key = extract_biss_key_from_block(block)
-                    if key:
-                        success = write_biss_key(sid, key, name)
-                        if success:
-                            found = True
+                    if key and write_biss_key(sid, key, name):
+                        found = True
                         break
+
             if found:
                 self.update_status("Restarting SoftCam...")
                 restart_softcam()
@@ -229,12 +302,21 @@ class BISSPro(Screen):
             self.res = (False, "Auto add failed")
         self.timer.start(100, True)
 
-    # ===== Show Result =====
+    # ------------------------------
+    # Show Result
+    # ------------------------------
     def show_result(self):
-        self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR, 5)
+        self.session.open(
+            MessageBox,
+            self.res[1],
+            MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR,
+            5
+        )
         self.update_status("")
 
-# ===== Entry Points =====
+# ==============================
+# Plugin Entry Points
+# ==============================
 def main(session, **kwargs):
     session.open(BISSPro)
 
@@ -248,4 +330,3 @@ def Plugins(**kwargs):
             fnc=main
         )
     ]
-
