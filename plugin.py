@@ -13,6 +13,10 @@ from threading import Thread
 from urllib.request import urlopen, urlretrieve
 import os, re, shutil
 
+# --- تحديد المسارات بشكل ديناميكي لحل مشكلة الأيقونات ---
+PLUGIN_PATH = os.path.dirname(__file__)
+ICON_PATH = os.path.join(PLUGIN_PATH, "icons")
+
 def get_softcam_path():
     paths = [
         "/etc/tuxbox/config/oscam/SoftCam.Key",
@@ -23,9 +27,6 @@ def get_softcam_path():
     for p in paths:
         if os.path.exists(p): return p
     return "/etc/tuxbox/config/oscam/SoftCam.Key"
-
-PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
-ICON_PATH = os.path.join(PLUGIN_PATH, "icons")
 
 class AutoScale:
     def __init__(self):
@@ -39,7 +40,7 @@ class BISSPro(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v2.9">
+        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v3.0">
             <widget name="menu" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(1060)},{self.ui.px(550)}" itemHeight="{self.ui.px(110)}" scrollbarMode="showOnDemand" transparent="1"/>
             <eLabel position="{self.ui.px(50)},{self.ui.px(600)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             <widget name="progress" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(15)}" transparent="1" />
@@ -70,26 +71,20 @@ class BISSPro(Screen):
     def save_biss_key(self, full_id, key, name):
         target = get_softcam_path()
         full_sid = full_id.zfill(8).upper()
-        
         try:
             if not os.path.exists(target):
                 os.system(f'touch {target}')
             os.system(f'chmod 644 {target}')
-
-            # حذف الشفرة القديمة
             os.system(f"sed -i '/F {full_sid}/d' {target}")
-
-            # إضافة الشفرة الجديدة
             new_entry = f"F {full_sid} 00000000 {key.upper()} ;{name}"
             os.system(f'echo "{new_entry}" >> {target}')
             
-            # --- إعادة تشغيل السوفتكام لضمان التفعيل ---
+            # ريستارت السوفتكام
             os.system("killall -9 oscam ncam >/dev/null 2>&1")
             if os.path.exists("/etc/init.d/softcam"):
                 os.system("/etc/init.d/softcam restart >/dev/null 2>&1")
             elif os.path.exists("/etc/init.d/cardserver"):
                 os.system("/etc/init.d/cardserver restart >/dev/null 2>&1")
-            
             return True
         except:
             return False
@@ -114,17 +109,13 @@ class BISSPro(Screen):
         service = self.session.nav.getCurrentService()
         if not service: return
         info = service.info()
-        
-        # استخراج SID + VPID
         raw_sid = info.getInfo(iServiceInformation.sSID)
         raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
-        
         hex_sid = "%04X" % (raw_sid & 0xFFFF)
         hex_vpid = "%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000"
         combined_id = hex_sid + hex_vpid
-        
         if self.save_biss_key(combined_id, key, info.getName()):
-            self.res = (True, f"Saved & Restarted: {combined_id}")
+            self.res = (True, f"Success: {combined_id}")
         else:
             self.res = (False, "Write Error")
         self.timer.start(100, True)
@@ -143,16 +134,13 @@ class BISSPro(Screen):
             info = service.info()
             raw_sid = info.getInfo(iServiceInformation.sSID)
             raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
-            
             hex_sid = "%04X" % (raw_sid & 0xFFFF)
             hex_vpid = "%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000"
             combined_id = hex_sid + hex_vpid
-            
             raw_data = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
             m = re.search(hex_sid + r'.*?([0-9A-Fa-f]{16})', raw_data, re.I)
-            
             if m and self.save_biss_key(combined_id, m.group(1), info.getName()):
-                self.res = (True, f"Auto Saved & Restarted: {combined_id}")
+                self.res = (True, f"Auto Saved: {combined_id}")
             else:
                 self.res = (False, f"Not Found: {hex_sid}")
         except: self.res = (False, "Server Error")
@@ -201,4 +189,4 @@ class HexInputScreen(Screen):
         else: self.session.open(MessageBox, "16 digits required!", MessageBox.TYPE_ERROR)
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v2.9 (Restart Fixed)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v3.0 (Dynamic Path)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
