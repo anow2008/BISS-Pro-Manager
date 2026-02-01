@@ -12,116 +12,33 @@ from threading import Thread, Lock
 from urllib.request import urlopen, urlretrieve, Request
 import os, re, shutil, base64
 
-PLUGIN_NAME = "BissPro"
-PLUGIN_VERSION = "1.1"
+# تحديد المسارات بدقة
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
-ICON_PATH = PLUGIN_PATH + "/icons/"
-PLUGIN_ICON = ICON_PATH + "plugin.png"
+# لضمان ظهور الأيقونة في القائمة، يجب أن تكون في المجلد الرئيسي للبلجن
+PLUGIN_ICON = os.path.join(PLUGIN_PATH, "plugin.png")
+ICON_PATH = os.path.join(PLUGIN_PATH, "icons/")
+
 UPDATE_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
 BISS_TXT_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt"
 lock = Lock()
 
 class AutoScale:
-    BASE_W = 1920.0
-    BASE_H = 1080.0
     def __init__(self):
         d = getDesktop(0).size()
-        self.w = d.width()
-        self.h = d.height()
-        self.scale = min(self.w / self.BASE_W, self.h / self.BASE_H)
+        self.scale = min(d.width() / 1920.0, d.height() / 1080.0)
     def px(self, v): return int(v * self.scale)
     def font(self, v): return int(max(18, v * self.scale))
 
 def get_key_path():
-    paths = ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key", "/usr/keys/SoftCam.Key"]
-    for p in paths:
+    for p in ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key", "/usr/keys/SoftCam.Key"]:
         if os.path.exists(p): return p
     return "/etc/tuxbox/config/SoftCam.Key"
 
 BISS_FILE = get_key_path()
 
-def ensure_biss_file():
-    try:
-        os.makedirs(os.path.dirname(BISS_FILE), exist_ok=True)
-        if not os.path.exists(BISS_FILE):
-            open(BISS_FILE, "w").close()
-        return os.access(BISS_FILE, os.W_OK)
-    except:
-        return False
-
 def reload_cam_keys():
     for cam in ("oscam", "ncam"):
         os.system(f"killall -HUP {cam} >/dev/null 2>&1")
-    return True
-
-def write_biss_key(sid, key, name):
-    if not ensure_biss_file(): return False
-    key = key[:16].upper()
-    with lock:
-        try:
-            lines = []
-            if os.path.exists(BISS_FILE):
-                with open(BISS_FILE, "r") as f:
-                    lines = f.readlines()
-            new = []
-            found = False
-            for l in lines:
-                if l.strip().startswith("F") and sid in l:
-                    new.append(f"F {sid} 00000000 {key} ;{name}\n")
-                    found = True
-                else:
-                    new.append(l)
-            if not found:
-                new.append(f"F {sid} 00000000 {key} ;{name}\n")
-            with open(BISS_FILE, "w") as f:
-                f.writelines(new)
-            return True
-        except:
-            return False
-
-class HexInputScreen(Screen):
-    def __init__(self, session):
-        self.ui = AutoScale()
-        Screen.__init__(self, session)
-        self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(700)},{self.ui.px(500)}" title="Enter BISS Key">
-            <widget name="keylabel" position="{self.ui.px(50)},{self.ui.px(30)}" size="{self.ui.px(600)},{self.ui.px(50)}" font="Regular;{self.ui.font(32)}" halign="center"/>
-            <widget name="hexlist" position="{self.ui.px(150)},{self.ui.px(100)}" size="{self.ui.px(400)},{self.ui.px(260)}" itemHeight="{self.ui.px(50)}"/>
-            <widget name="help" position="{self.ui.px(50)},{self.ui.px(380)}" size="{self.ui.px(600)},{self.ui.px(80)}" font="Regular;{self.ui.font(22)}" halign="center"/>
-        </screen>"""
-        self.hexchars = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F"]
-        self.key = ""
-        self["keylabel"] = Label()
-        self["help"] = Label("OK=Add 0-9=Direct Yellow=Clear Green=Save Red=Exit")
-        self["hexlist"] = MenuList(self.hexchars)
-        self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions"], {
-            "ok": self.add_char, "green": self.save, "yellow": self.backspace, "red": self.cancel, "cancel": self.cancel,
-            "0": self.keyNumberGlobal, "1": self.keyNumberGlobal, "2": self.keyNumberGlobal, "3": self.keyNumberGlobal,
-            "4": self.keyNumberGlobal, "5": self.keyNumberGlobal, "6": self.keyNumberGlobal, "7": self.keyNumberGlobal,
-            "8": self.keyNumberGlobal, "9": self.keyNumberGlobal}, -1)
-        self.onLayoutFinish.append(self.update_label)
-
-    def update_label(self):
-        self["keylabel"].setText("Key: " + self.key + "_" * (16 - len(self.key)))
-
-    def add_char(self):
-        if len(self.key) < 16:
-            self.key += self["hexlist"].getCurrent()
-            self.update_label()
-
-    def keyNumberGlobal(self, number):
-        if len(self.key) < 16:
-            self.key += str(number)
-            self.update_label()
-
-    def backspace(self):
-        self.key = self.key[:-1]
-        self.update_label()
-
-    def save(self):
-        if len(self.key) == 16: self.close(self.key)
-
-    def cancel(self): self.close(None)
 
 class BISSPro(Screen):
     def __init__(self, session):
@@ -129,35 +46,39 @@ class BISSPro(Screen):
         Screen.__init__(self, session)
         self.skin = f"""
         <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager">
-            <widget name="menu" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(1060)},{self.ui.px(600)}" itemHeight="{self.ui.px(120)}" scrollbarMode="showOnDemand"/>
+            <widget name="menu" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(1060)},{self.ui.px(600)}" itemHeight="{self.ui.px(120)}" scrollbarMode="showOnDemand" transparent="1"/>
             <widget name="status" position="{self.ui.px(20)},{self.ui.px(650)}" size="{self.ui.px(1060)},{self.ui.px(50)}" font="Regular;{self.ui.font(28)}" halign="center" transparent="1"/>
         </screen>"""
+        
         self["status"] = Label()
         self["menu"] = MenuList([])
         self["actions"] = ActionMap(["OkCancelActions", "DirectionActions"], {
             "ok": self.ok, "cancel": self.close, "up": self["menu"].up, "down": self["menu"].down}, -1)
         
         self.timer = eTimer()
-        self.timer_conn = self.timer.timeout.connect(self.show_result)
+        # الطريقة الصحيحة لربط التايمر في النسخ الجديدة
+        try: self.timer_conn = self.timer.timeout.connect(self.show_result)
+        except: self.timer.callback.append(self.show_result)
+        
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        items = [("Add BISS Manually", "add", ICON_PATH + "add.png"), 
-                 ("Update SoftCam.Key", "upd", ICON_PATH + "update.png"), 
-                 ("Auto Add BISS", "auto", ICON_PATH + "autoadd.png")]
+        items = [("Add BISS Manually", "add", "add.png"), 
+                 ("Update SoftCam.Key", "upd", "update.png"), 
+                 ("Auto Add BISS", "auto", "autoadd.png")]
         lst = []
-        for t, a, p in items:
-            png = LoadPixmap(p)
-            lst.append((a, [
-                MultiContentEntryPixmapAlphaTest(pos=(self.ui.px(10), self.ui.px(10)), size=(self.ui.px(100), self.ui.px(100)), png=png),
+        for text, action, icon in items:
+            p = os.path.join(ICON_PATH, icon)
+            pix = LoadPixmap(p) if os.path.exists(p) else None
+            lst.append((action, [
+                MultiContentEntryPixmapAlphaTest(pos=(self.ui.px(10), self.ui.px(10)), size=(self.ui.px(100), self.ui.px(100)), png=pix),
                 MultiContentEntryText(pos=(self.ui.px(130), self.ui.px(30)), size=(self.ui.px(800), self.ui.px(60)), 
-                                     font=0, text=t, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER)
+                                     font=0, text=text, flags=RT_HALIGN_LEFT | RT_VALIGN_CENTER)
             ]))
         self["menu"].l.setList(lst)
-        self["menu"].l.setFont(0, gFont("Regular", self.ui.font(32)))
-
-    def update_status(self, txt):
-        self["status"].setText(txt)
+        # تم تغيير طريقة ضبط الخط لتكون أكثر أماناً
+        if hasattr(self["menu"].l, 'setFont'):
+            self["menu"].l.setFont(0, gFont("Regular", self.ui.font(32)))
 
     def ok(self):
         curr = self["menu"].getCurrent()
@@ -165,64 +86,92 @@ class BISSPro(Screen):
         action = curr[0]
         service = self.session.nav.getCurrentService()
         if action == "add" and service:
+            from .plugin import HexInputScreen # استيراد محلي لتجنب التعارض
             self.session.openWithCallback(self.manual_done, HexInputScreen)
         elif action == "upd":
-            self.update_status("Updating SoftCam.Key...")
+            self["status"].setText("Updating...")
             Thread(target=self.do_update).start()
         elif action == "auto" and service:
-            self.update_status("Searching BISS key...")
+            self["status"].setText("Searching...")
             Thread(target=self.do_auto, args=(service,)).start()
 
     def manual_done(self, key):
         if not key: return
         info = self.session.nav.getCurrentService().info()
         sid = "%08X" % info.getInfo(iServiceInformation.sSID)
-        name = info.getName()
-        if write_biss_key(sid, key, name):
-            Thread(target=reload_cam_keys).start()
-            self.res = (True, "BISS key added")
-        else:
-            self.res = (False, "Write failed")
+        if self.save_key(sid, key, info.getName()):
+            self.res = (True, "Key Saved!")
+        else: self.res = (False, "Error Saving")
         self.timer.start(100, True)
+
+    def save_key(self, sid, key, name):
+        try:
+            with lock:
+                lines = open(BISS_FILE, "r").readlines() if os.path.exists(BISS_FILE) else []
+                with open(BISS_FILE, "w") as f:
+                    found = False
+                    for l in lines:
+                        if sid in l:
+                            f.write(f"F {sid} 00000000 {key} ;{name}\n")
+                            found = True
+                        else: f.write(l)
+                    if not found: f.write(f"F {sid} 00000000 {key} ;{name}\n")
+            reload_cam_keys()
+            return True
+        except: return False
 
     def do_update(self):
         try:
             urlretrieve(UPDATE_URL, "/tmp/SoftCam.Key")
             shutil.copy("/tmp/SoftCam.Key", BISS_FILE)
             reload_cam_keys()
-            self.res = (True, "SoftCam.Key updated")
-        except Exception as e:
-            self.res = (False, f"Update failed: {e}")
+            self.res = (True, "Updated Successfully")
+        except: self.res = (False, "Update Failed")
         self.timer.start(100, True)
 
     def do_auto(self, service):
         try:
             info = service.info()
             sid = "%08X" % info.getInfo(iServiceInformation.sSID)
-            name = info.getName()
-            raw = urlopen(BISS_TXT_URL, timeout=10).read().decode("utf-8", "ignore")
-            found = False
-            for line in raw.splitlines():
-                if sid in line.upper():
-                    m = re.search(r'([0-9A-Fa-f]{16})', line)
-                    if m:
-                        key = m.group(1)
-                        if write_biss_key(sid, key, name):
-                            reload_cam_keys()
-                            self.res = (True, "BISS key added automatically")
-                            found = True
-                            break
-            if not found: self.res = (False, "No key found for this SID")
-        except Exception as e:
-            self.res = (False, f"Auto add failed: {e}")
+            raw = urlopen(BISS_TXT_URL, timeout=10).read().decode("utf-8")
+            if sid in raw.upper():
+                m = re.search(sid + r'.*?([0-9A-Fa-f]{16})', raw, re.I)
+                if m and self.save_key(sid, m.group(1), info.getName()):
+                    self.res = (True, "Auto-Added!")
+                    self.timer.start(100, True)
+                    return
+            self.res = (False, "No Key Found")
+        except: self.res = (False, "Connection Error")
         self.timer.start(100, True)
 
     def show_result(self):
-        self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR, timeout=5)
-        self.update_status("")
+        self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR)
+        self["status"].setText("")
+
+# كلاس إدخال المفتاح (معدل)
+class HexInputScreen(Screen):
+    def __init__(self, session):
+        self.ui = AutoScale()
+        Screen.__init__(self, session)
+        self.skin = f"""
+        <screen position="center,center" size="{self.ui.px(700)},{self.ui.px(500)}" title="Enter BISS">
+            <widget name="keylabel" position="0,30" size="700,50" font="Regular;32" halign="center"/>
+            <widget name="hexlist" position="150,100" size="400,260" itemHeight="50"/>
+        </screen>"""
+        self.key = ""
+        self["keylabel"] = Label("Key: " + "_"*16)
+        self["hexlist"] = MenuList(["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"])
+        self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {
+            "ok": self.add, "cancel": self.close, "red": self.close, "green": self.save}, -1)
+    def add(self):
+        if len(self.key) < 16:
+            self.key += self["hexlist"].getCurrent()
+            self["keylabel"].setText("Key: " + self.key + "_"*(16-len(self.key)))
+    def save(self):
+        if len(self.key) == 16: self.close(self.key)
 
 def main(session, **kwargs):
     session.open(BISSPro)
 
 def Plugins(**kwargs):
-    return [PluginDescriptor(name=PLUGIN_NAME, description="BissPro Manager", icon=PLUGIN_ICON, where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+    return [PluginDescriptor(name="BissPro", description="Manager", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
