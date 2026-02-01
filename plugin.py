@@ -62,7 +62,6 @@ def get_key_path():
 BISS_FILE = get_key_path()
 
 def ensure_biss_file():
-    """Ensure SoftCam.Key exists and is writable."""
     if not os.path.exists(BISS_FILE):
         try:
             os.makedirs(os.path.dirname(BISS_FILE), exist_ok=True)
@@ -77,20 +76,18 @@ def ensure_biss_file():
     return True
 
 def extract_biss_key_from_block(block):
-    """Extract 16-char BISS key from a 4-line block."""
     if len(block) < 4:
         return None
     raw_key_line = block[3]
-    clean = re.sub(r'[^0-9A-Fa-f ]', '', raw_key_line)
-    parts = clean.split()
-    if len(parts) == 8:
-        return ''.join(parts).upper()
+    clean = re.sub(r'[^0-9A-Fa-f]', '', raw_key_line)
+    if len(clean) >= 16:
+        return clean[:16].upper()
     return None
 
 def write_biss_key(sid, key, name):
-    """Write or update BISS key in SoftCam.Key."""
     if not ensure_biss_file():
         return False
+    key = key.upper()[:16]  # Ensure exactly 16 chars
     try:
         with lock:
             lines = []
@@ -114,7 +111,6 @@ def write_biss_key(sid, key, name):
         return False
 
 def restart_softcam():
-    """Restart common softcams."""
     softcams = ["oscam", "cccam", "mgcamd", "ncamd"]
     for sc in softcams:
         try:
@@ -135,7 +131,6 @@ class BISSPro(Screen):
         </screen>"""
         Screen.__init__(self, session)
 
-        # Components
         self["status"] = Label("")
         self.update_menu()
         self["actions"] = ActionMap(
@@ -148,7 +143,6 @@ class BISSPro(Screen):
             },
             -1
         )
-
         self.timer = eTimer()
         self.timer.callback.append(self.show_result)
 
