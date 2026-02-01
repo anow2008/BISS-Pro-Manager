@@ -1,32 +1,24 @@
 <skin>
 
-    <!-- MAIN MENU -->
     <screen name="BISSPro" position="center,center" size="1000,560" title="BissPro Manager">
-        <widget name="menu"
-            position="100,80"
-            size="800,340"
+        <widget name="menu" position="100,80" size="800,340"
             font="Regular;28"
             itemHeight="60"
             selectionBackgroundColor="#0059b3"
             selectionForegroundColor="#ffffff" />
 
-        <widget name="status"
-            position="100,440"
-            size="800,30"
-            font="Regular;22"
-            halign="center" />
+        <widget name="status" position="100,440" size="800,30"
+            font="Regular;22" halign="center" />
 
-        <widget name="progress"
-            position="100,480"
-            size="800,18"
-            backgroundColor="#202020"
-            foregroundColor="#0059b3" />
+        <widget name="progress" position="100,480" size="800,18" />
     </screen>
 
-    <!-- BISS INPUT -->
     <screen name="EasyBissInput" position="center,center" size="900,320" title="Manual BISS Key">
 
-        <!-- 16 boxes -->
+        <widget name="hexlist" position="390,200" size="120,120"
+            font="Regular;26" />
+
+        <!-- 16 Digits -->
         <widget name="k0"  position="80,90"  size="40,60" font="Console;42" halign="center" />
         <widget name="k1"  position="130,90" size="40,60" font="Console;42" halign="center" />
         <widget name="k2"  position="180,90" size="40,60" font="Console;42" halign="center" />
@@ -47,10 +39,6 @@
         <widget name="k14" position="840,90" size="40,60" font="Console;42" halign="center" />
         <widget name="k15" position="890,90" size="40,60" font="Console;42" halign="center" />
 
-        <widget name="hexlist"
-            position="400,180"
-            size="120,120"
-            font="Regular;26" />
     </screen>
 
 </skin>
