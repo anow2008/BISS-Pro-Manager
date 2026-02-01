@@ -7,17 +7,15 @@ from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
 from Components.ProgressBar import ProgressBar
-from Components.Skin import loadSkin
 from enigma import iServiceInformation
+from skin import loadSkin
 import os, time
 
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro/"
 
-# تحميل الـ Skin مرة واحدة
 if os.path.exists(PLUGIN_PATH + "skin.xml"):
     loadSkin(PLUGIN_PATH + "skin.xml")
 
-# ================= Helpers =================
 def get_key_path():
     for p in (
         "/etc/tuxbox/config/oscam/SoftCam.Key",
@@ -41,15 +39,13 @@ def read_keys():
         return []
     return [l.strip() for l in open(BISS_FILE, "r", errors="ignore") if l.startswith("F ")]
 
-def find_key_by_sid(sid):
-    sid4 = sid[-4:].upper()
+def find_key(sid):
+    sid = sid[-4:].upper()
     for l in read_keys():
-        parts = l.split()
-        if len(parts) > 3 and parts[1].upper() == sid4:
+        if sid in l:
             return l
     return None
 
-# ================= Manual Input =================
 class EasyBissInput(Screen):
     def __init__(self, session, sid, mode="add", old=None, name="Channel"):
         Screen.__init__(self, session)
@@ -64,10 +60,10 @@ class EasyBissInput(Screen):
             self.key = list(old.split()[3])
 
         self.pos = 0
-
         self.labels = []
+
         for i in range(16):
-            self["k%d" % i] = Label("0")
+            self["k%d" % i] = Label(self.key[i])
             self.labels.append(self["k%d" % i])
 
         self["hexlist"] = MenuList([(c, c) for c in "ABCDEF"])
@@ -91,10 +87,8 @@ class EasyBissInput(Screen):
             self.labels[i].setText(self.key[i])
             if i == self.pos:
                 self.labels[i].instance.setBackgroundColor(0x0059B3)
-                self.labels[i].instance.setForegroundColor(0xFFFFFF)
             else:
                 self.labels[i].instance.setBackgroundColor(0x000000)
-                self.labels[i].instance.setForegroundColor(0xFFFFFF)
 
     def left(self):
         self.pos = (self.pos - 1) % 16
@@ -115,9 +109,7 @@ class EasyBissInput(Screen):
             self.right()
 
     def save(self):
-        new = "F %s 00000000 %s ;%s" % (
-            self.sid, "".join(self.key), self.name
-        )
+        new = "F %s 00000000 %s ;%s" % (self.sid, "".join(self.key), self.name)
 
         with open(BISS_FILE, "w") as f:
             for l in read_keys():
@@ -130,7 +122,6 @@ class EasyBissInput(Screen):
         self.session.open(MessageBox, "Key Saved", MessageBox.TYPE_INFO, 3)
         self.close()
 
-# ================= Main Screen =================
 class BISSPro(Screen):
     def __init__(self, session):
         Screen.__init__(self, session)
@@ -140,7 +131,6 @@ class BISSPro(Screen):
             ("Edit BISS Key", "edit"),
             ("Delete BISS Key", "delete"),
         ])
-        self["menu"].l.setItemHeight(60)
 
         self["status"] = Label("Ready")
         self["progress"] = ProgressBar()
@@ -154,7 +144,7 @@ class BISSPro(Screen):
 
     def ok(self):
         service = self.session.nav.getCurrentService()
-        info = service.info() if service else None
+        info = service.info()
         sid = "%08X" % info.getInfo(iServiceInformation.sSID)
         name = info.getName().replace(" ", "_")
 
@@ -164,14 +154,14 @@ class BISSPro(Screen):
             self.session.open(EasyBissInput, sid, "add", None, name)
 
         elif sel == "edit":
-            old = find_key_by_sid(sid)
+            old = find_key(sid)
             if old:
                 self.session.open(EasyBissInput, sid, "edit", old, name)
             else:
                 self.session.open(MessageBox, "No key for this channel", MessageBox.TYPE_INFO, 3)
 
         elif sel == "delete":
-            old = find_key_by_sid(sid)
+            old = find_key(sid)
             if old:
                 with open(BISS_FILE, "w") as f:
                     for l in read_keys():
@@ -179,7 +169,6 @@ class BISSPro(Screen):
                             f.write(l + "\n")
                 restartSoftcam()
 
-# ================= Entry =================
 def main(session, **kwargs):
     session.open(BISSPro)
 
@@ -187,7 +176,6 @@ def Plugins(**kwargs):
     return [
         PluginDescriptor(
             name="BissPro",
-            description="BISS Manager",
             where=PluginDescriptor.WHERE_PLUGINMENU,
             icon="icon.png",
             fnc=main
