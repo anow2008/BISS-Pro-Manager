@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-# =========================================================
-# BissPro Manager – FINAL STABLE – OpenATV
-# =========================================================
-
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
 from Screens.MessageBox import MessageBox
@@ -11,14 +7,12 @@ from Components.MenuList import MenuList
 from Components.Label import Label
 from Components.ProgressBar import ProgressBar
 from enigma import iServiceInformation
+from Tools.LoadPixmap import LoadPixmap
 import os, time, urllib.request
 
-PLUGIN_NAME = "BissPro"
+PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro/"
 
-UPDATE_URL   = "https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key"
-BISS_TXT_URL = "https://raw.githubusercontent.com/anow2008/softcam.key/main/biss.txt"
-
-# ================= Paths =================
+# ================= Helpers =================
 def get_key_path():
     for p in (
         "/etc/tuxbox/config/oscam/SoftCam.Key",
@@ -32,7 +26,6 @@ def get_key_path():
 
 BISS_FILE = get_key_path()
 
-# ================= Helpers =================
 def restartSoftcam():
     os.system("killall oscam ncam gcam 2>/dev/null")
     time.sleep(1)
@@ -46,41 +39,19 @@ def read_keys():
 def find_key_by_sid(sid):
     sid4 = sid[-4:].upper()
     for l in read_keys():
-        parts = l.split()
-        if len(parts) > 3 and parts[1].upper() == sid4:
+        if l.split()[1].upper() == sid4:
             return l
     return None
 
-def download(url, dest):
-    try:
-        urllib.request.urlretrieve(url, dest)
-        return True
-    except:
-        return False
-
 # ================= Manual Input =================
 class EasyBissInput(Screen):
-    skin = """
-    <screen position="center,center" size="900,300" title="Manual BISS Key">
-        <widget name="key"
-            position="50,90"
-            size="800,70"
-            font="Console;42"
-            halign="center"
-            valign="center"
-            parse="True"/>
-        <widget name="hexlist"
-            position="400,180"
-            size="100,100"/>
-    </screen>
-    """
-
     def __init__(self, session, sid, mode="add", old=None, name="Channel"):
         Screen.__init__(self, session)
+        self.skin = open(PLUGIN_PATH + "skin.xml").read()
 
-        self.sid  = sid
+        self.sid = sid[-4:]
         self.mode = mode
-        self.old  = old
+        self.old = old
         self.name = name
 
         self.key = list("0000000000000000")
@@ -89,7 +60,12 @@ class EasyBissInput(Screen):
 
         self.pos = 0
 
-        self["key"] = Label("")
+        self.labels = []
+        for i in range(16):
+            lbl = Label("0")
+            self["k%d" % i] = lbl
+            self.labels.append(lbl)
+
         self["hexlist"] = MenuList([(c, c) for c in "ABCDEF"])
 
         self["actions"] = ActionMap(
@@ -107,14 +83,14 @@ class EasyBissInput(Screen):
         self.refresh()
 
     def refresh(self):
-        txt = ""
         for i in range(16):
-            c = self.key[i]
+            self.labels[i].setText(self.key[i])
             if i == self.pos:
-                txt += '<span backgroundColor="#0059b3" foregroundColor="#ffffff"> %s </span>' % c
+                self.labels[i].instance.setBackgroundColor(0x0059B3)
+                self.labels[i].instance.setForegroundColor(0xFFFFFF)
             else:
-                txt += '<span foregroundColor="#ffffff"> %s </span>' % c
-        self["key"].setText(txt)
+                self.labels[i].instance.setBackgroundColor(0x000000)
+                self.labels[i].instance.setForegroundColor(0xFFFFFF)
 
     def left(self):
         self.pos = (self.pos - 1) % 16
@@ -136,7 +112,7 @@ class EasyBissInput(Screen):
 
     def save(self):
         new = "F %s 00000000 %s ;%s" % (
-            self.sid[-4:], "".join(self.key), self.name
+            self.sid, "".join(self.key), self.name
         )
 
         with open(BISS_FILE, "w") as f:
@@ -152,32 +128,18 @@ class EasyBissInput(Screen):
 
 # ================= Main Screen =================
 class BISSPro(Screen):
-    skin = """
-    <screen position="center,center" size="1000,580" title="BissPro Manager">
-        <widget name="menu" position="100,80" size="800,350"
-            selectionBackgroundColor="#0059b3"
-            selectionForegroundColor="#ffffff"/>
-        <widget name="status" position="100,450" size="800,30"
-            halign="center"/>
-        <widget name="progress" position="100,490" size="800,18"/>
-    </screen>
-    """
-
     def __init__(self, session):
         Screen.__init__(self, session)
+        self.skin = open(PLUGIN_PATH + "skin.xml").read()
 
         self["menu"] = MenuList([
             ("Add BISS Key", "add"),
             ("Edit BISS Key", "edit"),
             ("Delete BISS Key", "delete"),
-            ("Online Update SoftCam.Key", "update"),
-            ("Import BISS from biss.txt", "import"),
         ])
-        self["menu"].l.setItemHeight(60)
 
         self["status"] = Label("Ready")
         self["progress"] = ProgressBar()
-        self["progress"].setValue(0)
 
         self["actions"] = ActionMap(
             ["OkCancelActions"],
@@ -185,17 +147,13 @@ class BISSPro(Screen):
             -1
         )
 
-    def setProgress(self, text, value):
-        self["status"].setText(text)
-        self["progress"].setValue(value)
-
     def ok(self):
-        sel = self["menu"].getCurrent()[1]
-
         service = self.session.nav.getCurrentService()
         info = service.info() if service else None
-        sid = "%08X" % info.getInfo(iServiceInformation.sSID) if info else ""
-        name = info.getName().replace(" ", "_") if info else "Channel"
+        sid = "%08X" % info.getInfo(iServiceInformation.sSID)
+        name = info.getName().replace(" ", "_")
+
+        sel = self["menu"].getCurrent()[1]
 
         if sel == "add":
             self.session.open(EasyBissInput, sid, "add", None, name)
@@ -204,48 +162,27 @@ class BISSPro(Screen):
             old = find_key_by_sid(sid)
             if old:
                 self.session.open(EasyBissInput, sid, "edit", old, name)
-            else:
-                self.session.open(MessageBox, "No key for this channel", MessageBox.TYPE_INFO, 3)
 
         elif sel == "delete":
-            self.setProgress("Deleting...", 50)
             old = find_key_by_sid(sid)
             if old:
                 with open(BISS_FILE, "w") as f:
                     for l in read_keys():
                         if l != old:
                             f.write(l + "\n")
-            restartSoftcam()
-            self.setProgress("Done", 100)
-
-        elif sel == "update":
-            self.setProgress("Updating...", 30)
-            if download(UPDATE_URL, BISS_FILE):
-                self.setProgress("Restarting cam...", 70)
                 restartSoftcam()
-                self.setProgress("Done", 100)
-
-        elif sel == "import":
-            self.setProgress("Importing...", 30)
-            tmp = "/tmp/biss.txt"
-            if download(BISS_TXT_URL, tmp):
-                with open(BISS_FILE, "a") as out, open(tmp) as inp:
-                    for l in inp:
-                        if l.startswith("F "):
-                            out.write(l)
-                self.setProgress("Restarting cam...", 70)
-                restartSoftcam()
-                self.setProgress("Done", 100)
 
 # ================= Entry =================
 def main(session, **kwargs):
     session.open(BISSPro)
 
 def Plugins(**kwargs):
-    return [PluginDescriptor(
-        name=PLUGIN_NAME,
-        description="BISS Manager Stable",
-        where=PluginDescriptor.WHERE_PLUGINMENU,
-        icon="icon.png",
-        fnc=main
-    )]
+    return [
+        PluginDescriptor(
+            name="BissPro",
+            description="BISS Manager",
+            where=PluginDescriptor.WHERE_PLUGINMENU,
+            icon="icon.png",
+            fnc=main
+        )
+    ]
