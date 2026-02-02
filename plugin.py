@@ -165,30 +165,29 @@ class HexInputScreen(Screen):
     def __init__(self, session, channel_name=""):
         self.ui = AutoScale()
         Screen.__init__(self, session)
+        # تعديل جذري للمسافات لضمان ظهور شريط الحروف في كل الشاشات
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(950)},{self.ui.px(550)}" title="BISS Editor v3.3" backgroundColor="#1a1a1a">
-            <eLabel position="0,0" size="950,70" backgroundColor="#252525" zPosition="-1" />
-            <widget name="channel" position="20,15" size="910,40" font="Regular;{self.ui.font(32)}" halign="center" foregroundColor="#ffffff" transparent="1" />
-            <widget name="keylabel" position="20,100" size="910,80" font="Regular;{self.ui.font(60)}" halign="center" foregroundColor="#f0a30a" transparent="1" />
-            <eLabel position="20,220" size="910,120" backgroundColor="#000000" cornerRadius="10" />
-            <widget name="char_list" position="30,245" size="890,70" font="Regular;{self.ui.font(38)}" halign="center" foregroundColor="#00ff00" transparent="1" noWrap="1" />
-            <eLabel position="0,450" size="950,100" backgroundColor="#252525" zPosition="-1" />
-            <eLabel position="25,488" size="20,20" backgroundColor="#ff0000" />
-            <widget name="key_red" position="50,483" size="180,35" font="Regular;22" halign="left" transparent="1" />
-            <eLabel position="240,488" size="20,20" backgroundColor="#00ff00" />
-            <widget name="key_green" position="265,483" size="180,35" font="Regular;22" halign="left" transparent="1" />
-            <eLabel position="460,488" size="20,20" backgroundColor="#ffff00" />
-            <widget name="key_yellow" position="485,483" size="200,35" font="Regular;22" halign="left" transparent="1" />
-            <eLabel position="710,488" size="20,20" backgroundColor="#0000ff" />
-            <widget name="key_blue" position="735,483" size="200,35" font="Regular;22" halign="left" transparent="1" />
+        <screen position="center,center" size="{self.ui.px(1000)},{self.ui.px(550)}" title="BISS Editor v3.3" backgroundColor="#1a1a1a">
+            <widget name="channel" position="10,20" size="980,50" font="Regular;{self.ui.font(32)}" halign="center" transparent="1" />
+            <widget name="keylabel" position="10,100" size="980,90" font="Regular;{self.ui.font(70)}" halign="center" foregroundColor="#f0a30a" transparent="1" />
+            
+            <eLabel text="Selection (Use Up/Down &amp; OK):" position="10,210" size="980,40" font="Regular;{self.ui.font(24)}" halign="center" foregroundColor="#aaaaaa" transparent="1" />
+            <eLabel position="50,250" size="900,100" backgroundColor="#222222" />
+            <widget name="char_list" position="60,265" size="880,70" font="Regular;{self.ui.font(45)}" halign="center" foregroundColor="#00ff00" transparent="1" noWrap="1" />
+            
+            <eLabel position="0,460" size="1000,90" backgroundColor="#252525" zPosition="-1" />
+            <widget name="key_red" position="40,490" size="150,40" font="Regular;20" halign="left" transparent="1" foregroundColor="#ff0000" />
+            <widget name="key_green" position="240,490" size="150,40" font="Regular;20" halign="left" transparent="1" foregroundColor="#00ff00" />
+            <widget name="key_yellow" position="440,490" size="150,40" font="Regular;20" halign="left" transparent="1" foregroundColor="#ffff00" />
+            <widget name="key_blue" position="640,490" size="150,40" font="Regular;20" halign="left" transparent="1" foregroundColor="#0000ff" />
         </screen>"""
         self["channel"] = Label(f"Channel: {channel_name}")
         self["keylabel"] = Label("")
         self["char_list"] = Label("")
-        self["key_red"] = Label("Exit")
-        self["key_green"] = Label("Save")
-        self["key_yellow"] = Label("Clear Digit") 
-        self["key_blue"] = Label("Clear All")
+        self["key_red"] = Label("EXIT")
+        self["key_green"] = Label("SAVE")
+        self["key_yellow"] = Label("CLEAR") 
+        self["key_blue"] = Label("RESET")
         
         self.key_list = ["0"] * 16
         self.index = 0
@@ -197,8 +196,8 @@ class HexInputScreen(Screen):
         
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions", "DirectionActions"], {
             "ok": self.confirm_digit, 
-            "cancel": lambda: self.close(None),
-            "red": lambda: self.close(None), 
+            "cancel": self.close,
+            "red": self.close, 
             "green": self.save,
             "yellow": self.clear_current_digit, 
             "blue": self.clear_all,
@@ -221,11 +220,12 @@ class HexInputScreen(Screen):
         self["keylabel"].setText(d_text)
 
         c_text = ""
+        # عرض عدد محدود من الحروف حول الحرف المختار لضمان عدم خروج النص عن الشاشة
         for i in range(len(self.chars)):
             if i == self.char_index:
                 c_text += f" >{self.chars[i]}< "
             else:
-                c_text += f"  {self.chars[i]}  "
+                c_text += f" {self.chars[i]} "
         self["char_list"].setText(c_text)
 
     def move_char_up(self):
