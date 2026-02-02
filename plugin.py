@@ -43,38 +43,46 @@ class BISSPro(Screen):
             <widget name="menu" position="{self.ui.px(50)},{self.ui.px(30)}" size="{self.ui.px(1000)},{self.ui.px(450)}" itemHeight="{self.ui.px(90)}" scrollbarMode="showOnDemand" transparent="1"/>
             <eLabel position="{self.ui.px(50)},{self.ui.px(500)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             
-            <eLabel position="{self.ui.px(70)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#00ff00" />
-            <eLabel text="Smart Auto" position="{self.ui.px(110)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <eLabel position="{self.ui.px(70)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ff0000" />
+            <eLabel text="Add Key" position="{self.ui.px(110)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
             
-            <eLabel position="{self.ui.px(300)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ffff00" />
-            <eLabel text="SoftCam Update" position="{self.ui.px(340)},{self.ui.px(535)}" size="{self.ui.px(180)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <eLabel position="{self.ui.px(300)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#00ff00" />
+            <eLabel text="Key Editor" position="{self.ui.px(340)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
             
-            <eLabel position="{self.ui.px(530)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#0000ff" />
-            <eLabel text="Add Key" position="{self.ui.px(570)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <eLabel position="{self.ui.px(530)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ffff00" />
+            <eLabel text="Update" position="{self.ui.px(570)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
             
-            <eLabel position="{self.ui.px(760)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ff0000" />
-            <eLabel text="Key Editor" position="{self.ui.px(800)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <eLabel position="{self.ui.px(760)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#0000ff" />
+            <eLabel text="Smart Auto" position="{self.ui.px(800)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
             
             <widget name="status" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(80)}" font="Regular;{self.ui.font(32)}" halign="center" valign="center" transparent="1" foregroundColor="#f0a30a"/>
         </screen>"""
         self["status"] = Label("Ready")
         self["menu"] = MenuList([])
-        # التعديل هنا: أخضر للـ Auto وأزرق للـ Add
+        
+        # ربط الأكشن بالألوان حسب طلبك الجديد
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], {
             "ok": self.ok, 
             "cancel": self.close, 
-            "green": self.action_auto, 
+            "red": self.action_add, 
+            "green": self.action_editor, 
             "yellow": self.action_update, 
-            "blue": self.action_add, 
-            "red": self.action_editor
+            "blue": self.action_auto
         }, -1)
+        
         self.timer = eTimer()
         try: self.timer_callback = self.show_result; self.timer.callback.append(self.timer_callback)
         except: self.timer.timeout.connect(self.show_result)
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        items = [("Smart Auto Search (Internet)", "auto"), ("Add BISS Manually", "add"), ("Update SoftCam.Key File", "upd"), ("Key Editor (Edit/Delete)", "editor")]
+        # ترتيب العناصر في القائمة ليتناسب مع الأزرار
+        items = [
+            ("Add BISS Manually", "add"), 
+            ("Key Editor (Edit/Delete)", "editor"), 
+            ("Update SoftCam.Key File", "upd"), 
+            ("Smart Auto Search (Internet)", "auto")
+        ]
         lst = []
         for text, action in items:
             lst.append((action, [MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(15)), size=(self.ui.px(950), self.ui.px(60)), font=0, text=text, flags=RT_VALIGN_CENTER)]))
@@ -84,9 +92,9 @@ class BISSPro(Screen):
     def ok(self):
         curr = self["menu"].getCurrent(); act = curr[0] if curr else ""
         if act == "add": self.action_add()
+        elif act == "editor": self.action_editor()
         elif act == "upd": self.action_update()
         elif act == "auto": self.action_auto()
-        elif act == "editor": self.action_editor()
 
     def action_add(self):
         service = self.session.nav.getCurrentService()
@@ -224,16 +232,11 @@ class HexInputScreen(Screen):
         self.skin = f"""
         <screen position="center,center" size="1000,600" title="BISS Editor Pro" backgroundColor="#1a1a1a">
             <widget name="channel" position="10,20" size="980,60" font="Regular;42" halign="center" foregroundColor="#00ff00" transparent="1" />
-            
             <eLabel position="200,100" size="600,15" backgroundColor="#333333" zPosition="1" />
             <widget name="progress" position="200,100" size="600,15" foregroundColor="#00ff00" zPosition="2" />
-            
             <widget name="keylabel" position="10,140" size="980,120" font="Regular;75" halign="center" foregroundColor="#f0a30a" transparent="1" />
-            
             <eLabel text="Use UP/DOWN to change Char | LEFT/RIGHT to navigate" position="10,280" size="980,30" font="Regular;20" halign="center" foregroundColor="#888888" transparent="1" />
-            
             <widget name="char_list" position="10,330" size="980,80" font="Regular;45" halign="center" foregroundColor="#ffffff" transparent="1" />
-            
             <eLabel position="0,520" size="1000,80" backgroundColor="#252525" zPosition="-1" />
             <eLabel position="30,545" size="25,25" backgroundColor="#ff0000" zPosition="1" />
             <widget name="key_red" position="65,540" size="160,35" font="Regular;24" halign="left" transparent="1" />
@@ -244,22 +247,13 @@ class HexInputScreen(Screen):
             <eLabel position="750,545" size="25,25" backgroundColor="#0000ff" zPosition="1" />
             <widget name="key_blue" position="785,540" size="160,35" font="Regular;24" halign="left" transparent="1" />
         </screen>"""
-        
         self["channel"] = Label(f"{channel_name}")
-        self["keylabel"] = Label("")
-        self["char_list"] = Label("")
-        self["progress"] = ProgressBar()
+        self["keylabel"] = Label(""); self["char_list"] = Label(""); self["progress"] = ProgressBar()
         self["key_red"] = Label("EXIT"); self["key_green"] = Label("SAVE")
         self["key_yellow"] = Label("CLEAR"); self["key_blue"] = Label("RESET")
-        
-        if existing_key and len(existing_key) == 16:
-            self.key_list = list(existing_key.upper())
-        else:
-            self.key_list = ["0"] * 16
-            
-        self.index = 0
-        self.chars = ["A","B","C","D","E","F"]
-        self.char_index = 0
+        if existing_key and len(existing_key) == 16: self.key_list = list(existing_key.upper())
+        else: self.key_list = ["0"] * 16
+        self.index = 0; self.chars = ["A","B","C","D","E","F"]; self.char_index = 0
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions", "DirectionActions"], {
             "ok": self.confirm_digit, "cancel": self.exit_clean, "red": self.exit_clean, "green": self.save,
             "yellow": self.clear_current_digit, "blue": self.clear_all, "left": self.move_left, "right": self.move_right,
@@ -275,11 +269,9 @@ class HexInputScreen(Screen):
             if i == self.index: display_parts.append("[%s]" % char)
             else: display_parts.append(char)
             if (i + 1) % 4 == 0 and i < 15: display_parts.append("  -  ")
-        
         self["keylabel"].setText("".join(display_parts))
         progress_val = int(((self.index + 1) / 16.0) * 100)
         self["progress"].setValue(progress_val)
-        
         current_char = self.chars[self.char_index]
         self["char_list"].setText("  ".join(self.chars).replace(current_char, "> %s <" % current_char))
 
