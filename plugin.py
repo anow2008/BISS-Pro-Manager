@@ -176,20 +176,20 @@ class BissManagerList(Screen):
                 self.old_line = current
                 self.session.openWithCallback(self.finish_edit, HexInputScreen, ch_name)
 
-    def finish_edit(self, new_key):
-        if new_key:
-            path = get_softcam_path()
-            parts = self.old_line.split()
-            parts[3] = new_key.upper() # استبدال الشفرة القديمة بالجديدة
-            new_line = " ".join(parts)
-            try:
-                with open(path, "r") as f: lines = f.readlines()
-                with open(path, "w") as f:
-                    for line in lines:
-                        if line.strip() == self.old_line.strip(): f.write(new_line + "\n")
-                        else: f.write(line)
-                self.load_keys(); restart_softcam_global()
-            except: pass
+    def finish_edit(self, new_key=None):
+        if new_key is None: return # حماية من الكراش عند الضغط على Exit
+        path = get_softcam_path()
+        parts = self.old_line.split()
+        parts[3] = str(new_key).upper()
+        new_line = " ".join(parts)
+        try:
+            with open(path, "r") as f: lines = f.readlines()
+            with open(path, "w") as f:
+                for line in lines:
+                    if line.strip() == self.old_line.strip(): f.write(new_line + "\n")
+                    else: f.write(line)
+            self.load_keys(); restart_softcam_global()
+        except: pass
 
     def delete_confirm(self):
         current = self["keylist"].getCurrent()
@@ -233,7 +233,7 @@ class HexInputScreen(Screen):
         self["key_yellow"] = Label("CLEAR"); self["key_blue"] = Label("RESET")
         self.key_list = ["0"] * 16; self.index = 0; self.chars = ["A","B","C","D","E","F"]; self.char_index = 0
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions", "DirectionActions"], {
-            "ok": self.confirm_digit, "cancel": self.close, "red": self.close, "green": self.save,
+            "ok": self.confirm_digit, "cancel": self.exit_clean, "red": self.exit_clean, "green": self.save,
             "yellow": self.clear_current_digit, "blue": self.clear_all, "left": self.move_left, "right": self.move_right,
             "up": self.move_char_up, "down": self.move_char_down, "0": lambda: self.keyNum("0"), "1": lambda: self.keyNum("1"), 
             "2": lambda: self.keyNum("2"), "3": lambda: self.keyNum("3"), "4": lambda: self.keyNum("4"), "5": lambda: self.keyNum("5"), 
@@ -254,6 +254,7 @@ class HexInputScreen(Screen):
     def move_right(self): self.index = min(15, self.index + 1); self.update_display()
     def clear_current_digit(self): self.key_list[self.index] = "0"; self.update_display()
     def clear_all(self): self.key_list = ["0"] * 16; self.index = 0; self.update_display()
+    def exit_clean(self): self.close(None) # إرسال None بوضوح عند الخروج
     def save(self): self.close("".join(self.key_list))
 
 def main(session, **kwargs): session.open(BISSPro)
