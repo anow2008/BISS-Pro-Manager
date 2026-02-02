@@ -12,7 +12,6 @@ import os, re, shutil, time
 from urllib.request import urlopen, urlretrieve
 from threading import Thread
 
-# ... (نفس الدوال السابقة get_softcam_path و restart_softcam_global بدون تغيير) ...
 def get_softcam_path():
     paths = ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/ncam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key", "/usr/keys/SoftCam.Key"]
     for p in paths:
@@ -43,20 +42,31 @@ class BISSPro(Screen):
         <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Smart Sync v1.0">
             <widget name="menu" position="{self.ui.px(50)},{self.ui.px(30)}" size="{self.ui.px(1000)},{self.ui.px(450)}" itemHeight="{self.ui.px(90)}" scrollbarMode="showOnDemand" transparent="1"/>
             <eLabel position="{self.ui.px(50)},{self.ui.px(500)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
+            
             <eLabel position="{self.ui.px(70)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#00ff00" />
-            <eLabel text="Add Key" position="{self.ui.px(110)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <eLabel text="Smart Auto" position="{self.ui.px(110)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            
             <eLabel position="{self.ui.px(300)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ffff00" />
-            <eLabel text="Update" position="{self.ui.px(340)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <eLabel text="SoftCam Update" position="{self.ui.px(340)},{self.ui.px(535)}" size="{self.ui.px(180)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            
             <eLabel position="{self.ui.px(530)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#0000ff" />
-            <eLabel text="Auto" position="{self.ui.px(570)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <eLabel text="Add Key" position="{self.ui.px(570)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            
             <eLabel position="{self.ui.px(760)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ff0000" />
             <eLabel text="Key Editor" position="{self.ui.px(800)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            
             <widget name="status" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(80)}" font="Regular;{self.ui.font(32)}" halign="center" valign="center" transparent="1" foregroundColor="#f0a30a"/>
         </screen>"""
         self["status"] = Label("Ready")
         self["menu"] = MenuList([])
+        # التعديل هنا: أخضر للـ Auto وأزرق للـ Add
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], {
-            "ok": self.ok, "cancel": self.close, "green": self.action_add, "yellow": self.action_update, "blue": self.action_auto, "red": self.action_editor
+            "ok": self.ok, 
+            "cancel": self.close, 
+            "green": self.action_auto, 
+            "yellow": self.action_update, 
+            "blue": self.action_add, 
+            "red": self.action_editor
         }, -1)
         self.timer = eTimer()
         try: self.timer_callback = self.show_result; self.timer.callback.append(self.timer_callback)
@@ -64,7 +74,7 @@ class BISSPro(Screen):
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        items = [("Add BISS Manually", "add"), ("Update SoftCam.Key File", "upd"), ("Smart Auto Search (Internet)", "auto"), ("Key Editor (Edit/Delete)", "editor")]
+        items = [("Smart Auto Search (Internet)", "auto"), ("Add BISS Manually", "add"), ("Update SoftCam.Key File", "upd"), ("Key Editor (Edit/Delete)", "editor")]
         lst = []
         for text, action in items:
             lst.append((action, [MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(15)), size=(self.ui.px(950), self.ui.px(60)), font=0, text=text, flags=RT_VALIGN_CENTER)]))
@@ -259,23 +269,14 @@ class HexInputScreen(Screen):
         self.update_display()
 
     def update_display(self):
-        # منطق تقسيم الشفرة كل 4 خانات
         display_parts = []
         for i in range(16):
             char = self.key_list[i]
-            if i == self.index:
-                display_parts.append("[%s]" % char)
-            else:
-                display_parts.append(char)
-            
-            # إضافة فاصل بعد كل 4 خانات ما عدا الأخيرة
-            if (i + 1) % 4 == 0 and i < 15:
-                display_parts.append("  -  ")
+            if i == self.index: display_parts.append("[%s]" % char)
+            else: display_parts.append(char)
+            if (i + 1) % 4 == 0 and i < 15: display_parts.append("  -  ")
         
         self["keylabel"].setText("".join(display_parts))
-        
-        # تحديث شريط التقدم (من 0 إلى 100)
-        # نحسب النسبة بناءً على مكان المؤشر الحالي
         progress_val = int(((self.index + 1) / 16.0) * 100)
         self["progress"].setValue(progress_val)
         
