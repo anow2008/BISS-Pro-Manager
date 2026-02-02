@@ -39,7 +39,7 @@ class BISSPro(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v3.1">
+        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v3.2">
             <widget name="menu" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(1060)},{self.ui.px(550)}" itemHeight="{self.ui.px(110)}" scrollbarMode="showOnDemand" transparent="1"/>
             <eLabel position="{self.ui.px(50)},{self.ui.px(600)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             <widget name="progress" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(15)}" transparent="1" />
@@ -166,78 +166,76 @@ class HexInputScreen(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(900)},{self.ui.px(550)}" title="BISS Key Editor" backgroundColor="#1a1a1a">
-            <eLabel position="0,0" size="900,70" backgroundColor="#252525" zPosition="-1" />
-            <widget name="channel" position="20,15" size="860,40" font="Regular;{self.ui.font(34)}" halign="center" foregroundColor="#ffffff" transparent="1" />
-            <widget name="keylabel" position="50,110" size="800,80" font="Regular;{self.ui.font(60)}" halign="center" foregroundColor="#f0a30a" transparent="1" />
-            <widget name="hexlist" position="350,210" size="200,200" itemHeight="{self.ui.px(50)}" font="Regular;{self.ui.font(36)}" selectionColor="#f0a30a" transparent="1" />
-            <eLabel position="0,480" size="900,70" backgroundColor="#252525" zPosition="-1" />
-            <widget name="key_red" position="50,495" size="250,30" font="Regular;22" halign="left" transparent="1" />
-            <widget name="key_green" position="350,495" size="250,30" font="Regular;22" halign="left" transparent="1" />
-            <widget name="key_yellow" position="650,495" size="250,30" font="Regular;22" halign="left" transparent="1" />
+        <screen position="center,center" size="{self.ui.px(950)},{self.ui.px(550)}" title="BISS Editor v3.2" backgroundColor="#1a1a1a">
+            <eLabel position="0,0" size="950,70" backgroundColor="#252525" zPosition="-1" />
+            <widget name="channel" position="20,15" size="910,40" font="Regular;{self.ui.font(34)}" halign="center" foregroundColor="#ffffff" transparent="1" />
+            <widget name="keylabel" position="50,100" size="850,80" font="Regular;{self.ui.font(60)}" halign="center" foregroundColor="#f0a30a" transparent="1" />
+            <eLabel position="50,220" size="850,100" backgroundColor="#000000" cornerRadius="10" />
+            <widget name="char_list" position="50,235" size="850,70" font="Regular;{self.ui.font(45)}" halign="center" foregroundColor="#ffffff" transparent="1" />
+            <eLabel position="0,450" size="950,100" backgroundColor="#252525" zPosition="-1" />
+            <eLabel position="30,488" size="20,20" backgroundColor="#ff0000" />
+            <widget name="key_red" position="55,483" size="160,35" font="Regular;20" halign="left" transparent="1" />
+            <eLabel position="240,488" size="20,20" backgroundColor="#00ff00" />
+            <widget name="key_green" position="265,483" size="160,35" font="Regular;20" halign="left" transparent="1" />
+            <eLabel position="460,488" size="20,20" backgroundColor="#ffff00" />
+            <widget name="key_yellow" position="485,483" size="200,35" font="Regular;20" halign="left" transparent="1" />
+            <eLabel position="710,488" size="20,20" backgroundColor="#0000ff" />
+            <widget name="key_blue" position="735,483" size="200,35" font="Regular;20" halign="left" transparent="1" />
         </screen>"""
-        
-        self["channel"] = Label(f"CH: {channel_name}")
-        self["keylabel"] = Label("")
-        self["key_red"] = Label("Exit")
-        self["key_green"] = Label("Save")
-        self["key_yellow"] = Label("Clear Digit") # تم تغيير الوظيفة هنا
-        
-        self.key_list = ["0"] * 16
-        self.index = 0
-        
-        self["hexlist"] = MenuList(["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"])
+        self["channel"] = Label(f"Channel: {channel_name}")
+        self["keylabel"] = Label(""); self["char_list"] = Label("")
+        self["key_red"] = Label("Exit"); self["key_green"] = Label("Save")
+        self["key_yellow"] = Label("Clear Digit"); self["key_blue"] = Label("Clear All")
+        self.key_list = ["0"] * 16; self.index = 0
+        self.chars = ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"]
+        self.char_index = 0
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions", "DirectionActions"], {
-            "ok": self.confirm_digit, 
-            "cancel": lambda: self.close(None),
-            "red": lambda: self.close(None),
-            "green": self.save,
-            "yellow": self.clear_current_digit, # الوظيفة الجديدة
-            "left": self.move_left,
-            "right": self.move_right,
+            "ok": self.confirm_digit, "cancel": lambda: self.close(None),
+            "red": lambda: self.close(None), "green": self.save,
+            "yellow": self.clear_current_digit, "blue": self.clear_all,
+            "left": self.move_left, "right": self.move_right,
+            "up": self.move_char_left, "down": self.move_char_right,
             "0": lambda: self.keyNum("0"), "1": lambda: self.keyNum("1"), "2": lambda: self.keyNum("2"), 
             "3": lambda: self.keyNum("3"), "4": lambda: self.keyNum("4"), "5": lambda: self.keyNum("5"), 
             "6": lambda: self.keyNum("6"), "7": lambda: self.keyNum("7"), "8": lambda: self.keyNum("8"), 
-            "9": lambda: self.keyNum("9")
-        }, -1)
+            "9": lambda: self.keyNum("9")}, -1)
         self.update_display()
 
     def update_display(self):
-        display_text = ""
+        d_text = ""
         for i in range(16):
-            if i == self.index:
-                display_text += f"[{self.key_list[i]}]"
-            else:
-                display_text += self.key_list[i]
-            if (i + 1) % 4 == 0 and i < 15:
-                display_text += "  "
-        self["keylabel"].setText(display_text)
+            if i == self.index: d_text += f"[{self.key_list[i]}]"
+            else: d_text += self.key_list[i]
+            if (i + 1) % 4 == 0 and i < 15: d_text += "  "
+        self["keylabel"].setText(d_text)
+        c_text = ""
+        for i in range(len(self.chars)):
+            if i == self.char_index: c_text += f" >{self.chars[i]}< "
+            else: c_text += f" {self.chars[i]} "
+        self["char_list"].setText(c_text)
 
+    def move_char_left(self):
+        self.char_index = (self.char_index - 1) % len(self.chars); self.update_display()
+    def move_char_right(self):
+        self.char_index = (self.char_index + 1) % len(self.chars); self.update_display()
     def confirm_digit(self):
-        selected = self["hexlist"].getCurrent()
-        self.key_list[self.index] = selected
+        self.key_list[self.index] = self.chars[self.char_index]
         if self.index < 15: self.index += 1
         self.update_display()
-
     def keyNum(self, n):
         self.key_list[self.index] = n
         if self.index < 15: self.index += 1
         self.update_display()
-
     def move_left(self):
         if self.index > 0: self.index -= 1; self.update_display()
-
     def move_right(self):
         if self.index < 15: self.index += 1; self.update_display()
-
     def clear_current_digit(self):
-        """الزر الأصفر يقوم بمسح الخانة التي يقف عليها المؤشر حالياً فقط"""
-        self.key_list[self.index] = "0"
-        self.update_display()
-
+        self.key_list[self.index] = "0"; self.update_display()
+    def clear_all(self):
+        self.key_list = ["0"] * 16; self.index = 0; self.update_display()
     def save(self):
-        final_key = "".join(self.key_list)
-        self.close(final_key)
+        self.close("".join(self.key_list))
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v3.1 (Advanced Editor)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v1.0 (Full Pro)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
