@@ -199,7 +199,7 @@ class HexInputScreen(Screen):
         self["key_blue"] = Label("RESET")
         self.key_list = ["0"] * 16
         self.index = 0
-        self.chars = ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"]
+        self.chars = ["A","B","C","D","E","F"]
         self.char_index = 0
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions", "DirectionActions"], {
             "ok": self.confirm_digit, "cancel": self.close, "red": self.close, "green": self.save,
@@ -231,3 +231,4 @@ class HexInputScreen(Screen):
 
 def main(session, **kwargs): session.open(BISSPro)
 def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v3.3 Final English", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+
