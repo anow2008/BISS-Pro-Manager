@@ -5,11 +5,11 @@ from Screens.MessageBox import MessageBox
 from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
-from Components.ProgressBar import ProgressBar
 from Components.MultiContent import MultiContentEntryText
-from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_HALIGN_LEFT, RT_VALIGN_CENTER, RT_HALIGN_CENTER
+from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_VALIGN_CENTER
 import os, re, shutil, time
 from urllib.request import urlopen, urlretrieve
+from threading import Thread
 
 # مسار ملف الشفرات
 def get_softcam_path():
@@ -50,21 +50,15 @@ class BISSPro(Screen):
         self.skin = f"""
         <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v1.0">
             <widget name="menu" position="{self.ui.px(50)},{self.ui.px(30)}" size="{self.ui.px(1000)},{self.ui.px(450)}" itemHeight="{self.ui.px(90)}" scrollbarMode="showOnDemand" transparent="1"/>
-            
             <eLabel position="{self.ui.px(50)},{self.ui.px(500)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
-            
             <eLabel position="{self.ui.px(70)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#00ff00" />
             <eLabel text="Add Key" position="{self.ui.px(110)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
-            
             <eLabel position="{self.ui.px(300)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ffff00" />
             <eLabel text="Update" position="{self.ui.px(340)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
-            
             <eLabel position="{self.ui.px(530)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#0000ff" />
             <eLabel text="Auto" position="{self.ui.px(570)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
-            
             <eLabel position="{self.ui.px(760)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ff0000" />
             <eLabel text="Manage" position="{self.ui.px(800)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
-
             <widget name="status" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(80)}" font="Regular;{self.ui.font(32)}" halign="center" valign="center" transparent="1" foregroundColor="#f0a30a"/>
         </screen>"""
         
@@ -82,12 +76,11 @@ class BISSPro(Screen):
         }, -1)
         
         self.timer = eTimer()
-        try: self.timer.callback.append(self.show_result)
+        try: self.timer_callback = self.show_result; self.timer.callback.append(self.timer_callback)
         except: self.timer.timeout.connect(self.show_result)
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        # القائمة تعتمد الآن على النص فقط مع خلفية أو فراغ للأيقونة
         items = [
             ("Add BISS Manually", "add"),
             ("Update SoftCam.Key File", "upd"),
@@ -138,11 +131,17 @@ class BISSPro(Screen):
         service = self.session.nav.getCurrentService()
         if not service: return
         info = service.info()
+        
+        # استخراج الـ SID والـ Video PID
         raw_sid = info.getInfo(iServiceInformation.sSID)
         raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
+        
         hex_sid = "%04X" % (raw_sid & 0xFFFF)
         hex_vpid = "%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000"
+        
+        # دمج الـ SID مع الـ VPID ليصبح 8 أرقام
         combined_id = hex_sid + hex_vpid
+        
         if self.save_biss_key(combined_id, key, info.getName()):
             self.res = (True, f"Key Saved: {info.getName()}")
         else:
@@ -151,6 +150,7 @@ class BISSPro(Screen):
 
     def save_biss_key(self, full_id, key, name):
         target = get_softcam_path()
+        # التأكد من أن المعرف مكون من 8 أرقام
         full_sid = full_id.zfill(8).upper()
         try:
             if not os.path.exists(target): os.system(f'touch {target}')
@@ -174,10 +174,12 @@ class BISSPro(Screen):
         try:
             info = service.info()
             raw_sid = info.getInfo(iServiceInformation.sSID)
-            hex_sid = "%04X" % (raw_sid & 0xFFFF)
             raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
+            
+            hex_sid = "%04X" % (raw_sid & 0xFFFF)
             hex_vpid = "%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000"
             combined_id = hex_sid + hex_vpid
+            
             raw_data = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
             m = re.search(hex_sid + r'.*?([0-9A-Fa-f]{16})', raw_data, re.I)
             if m and self.save_biss_key(combined_id, m.group(1), info.getName()):
@@ -191,6 +193,7 @@ class BISSPro(Screen):
         self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR, timeout=5)
         self["status"].setText("Ready")
 
+# بقية الكلاسات تبقى كما هي بدون تغيير (BissManagerList, HexInputScreen, إلخ)
 class BissManagerList(Screen):
     def __init__(self, session):
         self.ui = AutoScale()
