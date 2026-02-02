@@ -169,29 +169,26 @@ class HexInputScreen(Screen):
         <screen position="center,center" size="{self.ui.px(950)},{self.ui.px(550)}" title="BISS Editor v3.3" backgroundColor="#1a1a1a">
             <eLabel position="0,0" size="950,70" backgroundColor="#252525" zPosition="-1" />
             <widget name="channel" position="20,15" size="910,40" font="Regular;{self.ui.font(32)}" halign="center" foregroundColor="#ffffff" transparent="1" />
-            
             <widget name="keylabel" position="20,100" size="910,80" font="Regular;{self.ui.font(60)}" halign="center" foregroundColor="#f0a30a" transparent="1" />
-            
-            <eLabel position="20,220" size="910,100" backgroundColor="#000000" cornerRadius="10" />
-            <widget name="char_list" position="30,235" size="890,70" font="Regular;{self.ui.font(38)}" halign="center" foregroundColor="#ffffff" transparent="1" noWrap="1" />
-            
+            <eLabel position="20,220" size="910,120" backgroundColor="#000000" cornerRadius="10" />
+            <widget name="char_list" position="30,245" size="890,70" font="Regular;{self.ui.font(38)}" halign="center" foregroundColor="#00ff00" transparent="1" noWrap="1" />
             <eLabel position="0,450" size="950,100" backgroundColor="#252525" zPosition="-1" />
             <eLabel position="25,488" size="20,20" backgroundColor="#ff0000" />
-            <widget name="key_red" position="50,483" size="180,35" font="Regular;18" halign="left" transparent="1" />
+            <widget name="key_red" position="50,483" size="180,35" font="Regular;22" halign="left" transparent="1" />
             <eLabel position="240,488" size="20,20" backgroundColor="#00ff00" />
-            <widget name="key_green" position="265,483" size="180,35" font="Regular;18" halign="left" transparent="1" />
+            <widget name="key_green" position="265,483" size="180,35" font="Regular;22" halign="left" transparent="1" />
             <eLabel position="460,488" size="20,20" backgroundColor="#ffff00" />
-            <widget name="key_yellow" position="485,483" size="200,35" font="Regular;18" halign="left" transparent="1" />
+            <widget name="key_yellow" position="485,483" size="200,35" font="Regular;22" halign="left" transparent="1" />
             <eLabel position="710,488" size="20,20" backgroundColor="#0000ff" />
-            <widget name="key_blue" position="735,483" size="200,35" font="Regular;18" halign="left" transparent="1" />
+            <widget name="key_blue" position="735,483" size="200,35" font="Regular;22" halign="left" transparent="1" />
         </screen>"""
         self["channel"] = Label(f"Channel: {channel_name}")
         self["keylabel"] = Label("")
         self["char_list"] = Label("")
-        self["key_red"] = Label("خروج")
-        self["key_green"] = Label("حفظ")
-        self["key_yellow"] = Label("مسح رقم") 
-        self["key_blue"] = Label("مسح الكل")
+        self["key_red"] = Label("Exit")
+        self["key_green"] = Label("Save")
+        self["key_yellow"] = Label("Clear Digit") 
+        self["key_blue"] = Label("Clear All")
         
         self.key_list = ["0"] * 16
         self.index = 0
@@ -207,8 +204,8 @@ class HexInputScreen(Screen):
             "blue": self.clear_all,
             "left": self.move_left, 
             "right": self.move_right,
-            "up": self.move_char_left, 
-            "down": self.move_char_right,
+            "up": self.move_char_up, 
+            "down": self.move_char_down,
             "0": lambda: self.keyNum("0"), "1": lambda: self.keyNum("1"), "2": lambda: self.keyNum("2"), 
             "3": lambda: self.keyNum("3"), "4": lambda: self.keyNum("4"), "5": lambda: self.keyNum("5"), 
             "6": lambda: self.keyNum("6"), "7": lambda: self.keyNum("7"), "8": lambda: self.keyNum("8"), 
@@ -231,28 +228,36 @@ class HexInputScreen(Screen):
                 c_text += f"  {self.chars[i]}  "
         self["char_list"].setText(c_text)
 
-    def move_char_left(self):
+    def move_char_up(self):
         self.char_index = (self.char_index - 1) % len(self.chars)
         self.update_display()
-    def move_char_right(self):
+
+    def move_char_down(self):
         self.char_index = (self.char_index + 1) % len(self.chars)
         self.update_display()
+
     def confirm_digit(self):
         self.key_list[self.index] = self.chars[self.char_index]
         if self.index < 15: self.index += 1
         self.update_display()
+
     def keyNum(self, n):
         self.key_list[self.index] = n
         if self.index < 15: self.index += 1
         self.update_display()
+
     def move_left(self):
         if self.index > 0: self.index -= 1; self.update_display()
+
     def move_right(self):
         if self.index < 15: self.index += 1; self.update_display()
+
     def clear_current_digit(self):
         self.key_list[self.index] = "0"; self.update_display()
+
     def clear_all(self):
         self.key_list = ["0"] * 16; self.index = 0; self.update_display()
+
     def save(self):
         self.close("".join(self.key_list))
 
