@@ -118,8 +118,15 @@ class BISSPro(Screen):
     def save_biss_key(self, full_id, key, name):
         target = get_softcam_path()
         try:
-            os.system(f"sed -i '/F {full_id.upper()}/d' '{target}'")
-            with open(target, "a") as f: f.write(f"F {full_id.upper()} 00000000 {key.upper()} ;{name}\n")
+            lines = []
+            if os.path.exists(target):
+                with open(target, "r") as f:
+                    for line in f:
+                        if f"F {full_id.upper()}" not in line.upper():
+                            lines.append(line)
+            lines.append(f"F {full_id.upper()} 00000000 {key.upper()} ;{name}\n")
+            with open(target, "w") as f:
+                f.writelines(lines)
             restart_softcam_global()
             return True
         except: return False
@@ -137,32 +144,20 @@ class BISSPro(Screen):
             info = service.info()
             ch_name = info.getName().strip().lower()
             search_name = ch_name.split()[0] if ch_name else "unknown"
-            
-            # جلب بيانات التردد بدقة
             t_data = info.getInfoObject(iServiceInformation.sTransponderData)
             freq_val = t_data.get("frequency", 0)
-            if freq_val > 50000: freq_val /= 1000 # تحويل Hz إلى MHz إن وجد
+            if freq_val > 50000: freq_val /= 1000
             curr_freq = str(int(freq_val))
-            
-            # جلب الاستقطاب لتعزيز دقة البحث
             pol_id = t_data.get("polarization", -1)
             pol_str = {0: "H", 1: "V", 2: "L", 3: "R"}.get(pol_id, "")
-
-            # معرفات القناة للحفظ
             raw_sid = info.getInfo(iServiceInformation.sSID)
             combined_id = ("%04X" % (raw_sid & 0xFFFF)) + ("%04X" % (info.getInfo(iServiceInformation.sVideoPID) & 0xFFFF))
-
-            # تحميل قاعدة بيانات الشفرات
             raw_data = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
-            
-            # Regex مطور يشمل التردد + الاستقطاب (اختياري) + اسم القناة + الشفرة
             pattern = re.escape(curr_freq) + r'.*?' + re.escape(pol_str) + r'.*?' + re.escape(search_name) + r'.*?(([0-9A-Fa-f]{2}[\s\t]*){8})'
             m = re.search(pattern, raw_data, re.I | re.S)
-            
-            if not m: # محاولة ثانية بدون استقطاب في حال عدم وجوده بالملف
+            if not m:
                 pattern = re.escape(curr_freq) + r'.*?' + re.escape(search_name) + r'.*?(([0-9A-Fa-f]{2}[\s\t]*){8})'
                 m = re.search(pattern, raw_data, re.I | re.S)
-
             if m:
                 clean_key = m.group(1).replace(" ", "").replace("\t", "").strip().upper()
                 if self.save_biss_key(combined_id, clean_key, info.getName()):
@@ -206,10 +201,19 @@ class BissManagerList(Screen):
 
     def delete_key(self, answer):
         if answer:
-            current = self["keylist"].getCurrent(); path = get_softcam_path()
+            current = self["keylist"].getCurrent()
+            if not current: return
+            path = get_softcam_path()
             try:
-                os.system(f"sed -i '/{re.escape(current)}/d' '{path}'")
-                self.load_keys(); restart_softcam_global()
+                if os.path.exists(path):
+                    with open(path, "r") as f:
+                        lines = f.readlines()
+                    # استبعاد السطر المختار بدقة
+                    new_lines = [l for l in lines if l.strip() != current.strip()]
+                    with open(path, "w") as f:
+                        f.writelines(new_lines)
+                    self.load_keys()
+                    restart_softcam_global()
             except: pass
 
 class HexInputScreen(Screen):
