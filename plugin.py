@@ -13,6 +13,9 @@ from threading import Thread
 from urllib.request import urlopen, urlretrieve
 import os, re, shutil, time
 
+# تحديد المسار الرئيسي للبلجن
+PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
+
 def get_softcam_path():
     paths = [
         "/etc/tuxbox/config/oscam/SoftCam.Key",
@@ -23,9 +26,6 @@ def get_softcam_path():
     for p in paths:
         if os.path.exists(p): return p
     return "/etc/tuxbox/config/oscam/SoftCam.Key"
-
-PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
-ICON_PATH = os.path.join(PLUGIN_PATH, "icons")
 
 class AutoScale:
     def __init__(self):
@@ -55,11 +55,18 @@ class BISSPro(Screen):
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        items = [("Add BISS Manually", "add", "add.png"), ("Update SoftCam.Key", "upd", "update.png"), ("Auto Add BISS", "auto", "autoadd.png")]
+        # مصفوفة تحتوي على (النص، الأكشن، اسم ملف الأيقونة)
+        items = [
+            ("Add BISS Manually", "add", "add.png"), 
+            ("Update SoftCam.Key", "upd", "update.png"), 
+            ("Auto Add BISS", "auto", "autoadd.png")
+        ]
         lst = []
         for text, action, icon_name in items:
-            p = os.path.join(ICON_PATH, icon_name)
+            # البحث عن الأيقونة في المجلد الرئيسي مباشرة
+            p = os.path.join(PLUGIN_PATH, icon_name)
             pix = LoadPixmap(path=p) if os.path.exists(p) else None
+            
             lst.append((action, [
                 MultiContentEntryPixmapAlphaTest(pos=(self.ui.px(25), self.ui.px(15)), size=(self.ui.px(80), self.ui.px(80)), png=pix),
                 MultiContentEntryText(pos=(self.ui.px(130), self.ui.px(25)), size=(self.ui.px(800), self.ui.px(60)), font=0, text=text, flags=RT_VALIGN_CENTER)
@@ -67,6 +74,7 @@ class BISSPro(Screen):
         self["menu"].l.setList(lst)
         if hasattr(self["menu"].l, 'setFont'): self["menu"].l.setFont(0, gFont("Regular", self.ui.font(32)))
 
+    # ... بقية الدوال (restart_softcam, save_biss_key, ok, manual_done, do_update, do_auto, show_result) تبقى كما هي في الكود السابق ...
     def restart_softcam(self):
         os.system("killall -9 oscam ncam vicardd gbox 2>/dev/null")
         time.sleep(1.5)
@@ -161,6 +169,7 @@ class BISSPro(Screen):
         self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR, timeout=5)
         self["status"].setText("Ready"); self["progress"].setValue(0)
 
+# واجهة إدخال الشفرة (HexInputScreen) تظل كما هي في النسخة الملونة الأخيرة
 class HexInputScreen(Screen):
     def __init__(self, session, channel_name=""):
         self.ui = AutoScale()
@@ -171,22 +180,16 @@ class HexInputScreen(Screen):
             <widget name="keylabel" position="10,100" size="980,100" font="Regular;65" halign="center" foregroundColor="#f0a30a" transparent="1" />
             <eLabel text="Select Char (Up/Down) then press OK:" position="10,220" size="980,40" font="Regular;26" halign="center" foregroundColor="#aaaaaa" transparent="1" />
             <widget name="char_list" position="10,270" size="980,80" font="Regular;42" halign="center" foregroundColor="#00ff00" transparent="1" />
-            
             <eLabel position="0,420" size="1000,80" backgroundColor="#252525" zPosition="-1" />
-            
             <eLabel position="30,445" size="25,25" backgroundColor="#ff0000" zPosition="1" />
             <widget name="key_red" position="65,440" size="160,35" font="Regular;24" halign="left" transparent="1" foregroundColor="#ffffff" />
-            
             <eLabel position="270,445" size="25,25" backgroundColor="#00ff00" zPosition="1" />
             <widget name="key_green" position="305,440" size="160,35" font="Regular;24" halign="left" transparent="1" foregroundColor="#ffffff" />
-            
             <eLabel position="510,445" size="25,25" backgroundColor="#ffff00" zPosition="1" />
             <widget name="key_yellow" position="545,440" size="160,35" font="Regular;24" halign="left" transparent="1" foregroundColor="#ffffff" />
-            
             <eLabel position="750,445" size="25,25" backgroundColor="#0000ff" zPosition="1" />
             <widget name="key_blue" position="785,440" size="160,35" font="Regular;24" halign="left" transparent="1" foregroundColor="#ffffff" />
         </screen>"""
-        
         self["channel"] = Label(f"CH: {channel_name}")
         self["keylabel"] = Label("")
         self["char_list"] = Label("")
@@ -194,29 +197,17 @@ class HexInputScreen(Screen):
         self["key_green"] = Label("SAVE")
         self["key_yellow"] = Label("CLEAR") 
         self["key_blue"] = Label("RESET")
-        
         self.key_list = ["0"] * 16
         self.index = 0
         self.chars = ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"]
         self.char_index = 0
-        
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions", "DirectionActions"], {
-            "ok": self.confirm_digit, 
-            "cancel": self.close,
-            "red": self.close, 
-            "green": self.save,
-            "yellow": self.clear_current_digit, 
-            "blue": self.clear_all,
-            "left": self.move_left, 
-            "right": self.move_right,
-            "up": self.move_char_up, 
-            "down": self.move_char_down,
-            "0": lambda: self.keyNum("0"), "1": lambda: self.keyNum("1"), "2": lambda: self.keyNum("2"), 
-            "3": lambda: self.keyNum("3"), "4": lambda: self.keyNum("4"), "5": lambda: self.keyNum("5"), 
-            "6": lambda: self.keyNum("6"), "7": lambda: self.keyNum("7"), "8": lambda: self.keyNum("8"), 
-            "9": lambda: self.keyNum("9")}, -1)
+            "ok": self.confirm_digit, "cancel": self.close, "red": self.close, "green": self.save,
+            "yellow": self.clear_current_digit, "blue": self.clear_all, "left": self.move_left, "right": self.move_right,
+            "up": self.move_char_up, "down": self.move_char_down, "0": lambda: self.keyNum("0"), "1": lambda: self.keyNum("1"), 
+            "2": lambda: self.keyNum("2"), "3": lambda: self.keyNum("3"), "4": lambda: self.keyNum("4"), "5": lambda: self.keyNum("5"), 
+            "6": lambda: self.keyNum("6"), "7": lambda: self.keyNum("7"), "8": lambda: self.keyNum("8"), "9": lambda: self.keyNum("9")}, -1)
         self.update_display()
-
     def update_display(self):
         d_text = ""
         for i in range(16):
@@ -224,49 +215,19 @@ class HexInputScreen(Screen):
             else: d_text += self.key_list[i]
             if (i + 1) % 4 == 0 and i < 15: d_text += "  "
         self["keylabel"].setText(d_text)
-
         c_text = "  ".join(self.chars)
         current_char = self.chars[self.char_index]
         c_text = c_text.replace(current_char, " >%s< " % current_char)
         self["char_list"].setText(c_text)
-
-    def move_char_up(self):
-        self.char_index = (self.char_index - 1) % len(self.chars)
-        self.update_display()
-
-    def move_char_down(self):
-        self.char_index = (self.char_index + 1) % len(self.chars)
-        self.update_display()
-
-    def confirm_digit(self):
-        self.key_list[self.index] = self.chars[self.char_index]
-        if self.index < 15: self.index += 1
-        self.update_display()
-
-    def keyNum(self, n):
-        self.key_list[self.index] = n
-        if self.index < 15: self.index += 1
-        self.update_display()
-
-    def move_left(self):
-        if self.index > 0: self.index -= 1
-        self.update_display()
-
-    def move_right(self):
-        if self.index < 15: self.index += 1
-        self.update_display()
-
-    def clear_current_digit(self):
-        self.key_list[self.index] = "0"
-        self.update_display()
-
-    def clear_all(self):
-        self.key_list = ["0"] * 16
-        self.index = 0
-        self.update_display()
-
-    def save(self):
-        self.close("".join(self.key_list))
+    def move_char_up(self): self.char_index = (self.char_index - 1) % len(self.chars); self.update_display()
+    def move_char_down(self): self.char_index = (self.char_index + 1) % len(self.chars); self.update_display()
+    def confirm_digit(self): self.key_list[self.index] = self.chars[self.char_index]; self.index = min(15, self.index + 1); self.update_display()
+    def keyNum(self, n): self.key_list[self.index] = n; self.index = min(15, self.index + 1); self.update_display()
+    def move_left(self): self.index = max(0, self.index - 1); self.update_display()
+    def move_right(self): self.index = min(15, self.index + 1); self.update_display()
+    def clear_current_digit(self): self.key_list[self.index] = "0"; self.update_display()
+    def clear_all(self): self.key_list = ["0"] * 16; self.index = 0; self.update_display()
+    def save(self): self.close("".join(self.key_list))
 
 def main(session, **kwargs): session.open(BISSPro)
 def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v3.3 Final English", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
