@@ -44,30 +44,30 @@ class BISSPro(Screen):
             <eLabel position="{self.ui.px(50)},{self.ui.px(500)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             
             <eLabel position="{self.ui.px(70)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ff0000" />
-            <eLabel text="Add Key" position="{self.ui.px(110)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <widget name="btn_red" position="{self.ui.px(110)},{self.ui.px(535)}" size="{self.ui.px(180)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
             
             <eLabel position="{self.ui.px(300)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#00ff00" />
-            <eLabel text="Key Editor" position="{self.ui.px(340)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <widget name="btn_green" position="{self.ui.px(340)},{self.ui.px(535)}" size="{self.ui.px(180)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
             
             <eLabel position="{self.ui.px(530)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ffff00" />
-            <eLabel text="Update" position="{self.ui.px(570)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <widget name="btn_yellow" position="{self.ui.px(570)},{self.ui.px(535)}" size="{self.ui.px(180)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
             
             <eLabel position="{self.ui.px(760)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#0000ff" />
-            <eLabel text="Smart Auto" position="{self.ui.px(800)},{self.ui.px(535)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <widget name="btn_blue" position="{self.ui.px(800)},{self.ui.px(535)}" size="{self.ui.px(180)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
             
             <widget name="status" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(80)}" font="Regular;{self.ui.font(32)}" halign="center" valign="center" transparent="1" foregroundColor="#f0a30a"/>
         </screen>"""
-        self["status"] = Label("Ready")
-        self["menu"] = MenuList([])
         
-        # ربط الأكشن بالألوان حسب طلبك الجديد
+        self["status"] = Label("جاهز للاستخدام")
+        self["btn_red"] = Label("إضافة يدوياً")
+        self["btn_green"] = Label("محرر الشفرات")
+        self["btn_yellow"] = Label("تحديث الملف")
+        self["btn_blue"] = Label("بحث تلقائي")
+        
+        self["menu"] = MenuList([])
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], {
-            "ok": self.ok, 
-            "cancel": self.close, 
-            "red": self.action_add, 
-            "green": self.action_editor, 
-            "yellow": self.action_update, 
-            "blue": self.action_auto
+            "ok": self.ok, "cancel": self.close, "red": self.action_add, "green": self.action_editor, 
+            "yellow": self.action_update, "blue": self.action_auto
         }, -1)
         
         self.timer = eTimer()
@@ -76,12 +76,11 @@ class BISSPro(Screen):
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        # ترتيب العناصر في القائمة ليتناسب مع الأزرار
         items = [
-            ("Add BISS Manually", "add"), 
-            ("Key Editor (Edit/Delete)", "editor"), 
-            ("Update SoftCam.Key File", "upd"), 
-            ("Smart Auto Search (Internet)", "auto")
+            ("إضافة شفرة BISS يدوياً", "add"), 
+            ("إدارة ومسح الشفرات (Editor)", "editor"), 
+            ("تحديث ملف SoftCam.Key من الإنترنت", "upd"), 
+            ("بحث تلقائي ذكي عن الشفرة", "auto")
         ]
         lst = []
         for text, action in items:
@@ -99,7 +98,7 @@ class BISSPro(Screen):
     def action_add(self):
         service = self.session.nav.getCurrentService()
         if service: self.session.openWithCallback(self.manual_done, HexInputScreen, service.info().getName())
-        else: self.session.open(MessageBox, "No Active Channel!", MessageBox.TYPE_ERROR)
+        else: self.session.open(MessageBox, "لا توجد قناة نشطة!", MessageBox.TYPE_ERROR)
 
     def action_editor(self): self.session.open(BissManagerList)
 
@@ -111,8 +110,8 @@ class BISSPro(Screen):
         raw_sid = info.getInfo(iServiceInformation.sSID)
         raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
         combined_id = ("%04X" % (raw_sid & 0xFFFF)) + ("%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000")
-        if self.save_biss_key(combined_id, key, info.getName()): self.res = (True, f"Saved: {info.getName()}")
-        else: self.res = (False, "File Error")
+        if self.save_biss_key(combined_id, key, info.getName()): self.res = (True, f"تم الحفظ بنجاح: {info.getName()}")
+        else: self.res = (False, "خطأ في حفظ الملف")
         self.timer.start(100, True)
 
     def save_biss_key(self, full_id, key, name):
@@ -131,20 +130,20 @@ class BISSPro(Screen):
 
     def show_result(self):
         self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR, timeout=5)
-        self["status"].setText("Ready")
+        self["status"].setText("جاهز")
 
-    def action_update(self): self["status"].setText("Updating..."); Thread(target=self.do_update).start()
+    def action_update(self): self["status"].setText("جاري التحديث..."); Thread(target=self.do_update).start()
     def do_update(self):
         try:
             urlretrieve("https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key", "/tmp/SoftCam.Key")
-            shutil.copy("/tmp/SoftCam.Key", get_softcam_path()); restart_softcam_global(); self.res = (True, "Updated")
-        except: self.res = (False, "Error")
+            shutil.copy("/tmp/SoftCam.Key", get_softcam_path()); restart_softcam_global(); self.res = (True, "تم تحديث الملف بنجاح")
+        except: self.res = (False, "فشل الاتصال بالخادم")
         self.timer.start(100, True)
 
     def action_auto(self):
         service = self.session.nav.getCurrentService()
-        if service: self["status"].setText("Auto Search..."); Thread(target=self.do_auto, args=(service,)).start()
-        else: self.session.open(MessageBox, "No Channel", MessageBox.TYPE_ERROR)
+        if service: self["status"].setText("جاري البحث التلقائي..."); Thread(target=self.do_auto, args=(service,)).start()
+        else: self.session.open(MessageBox, "لا توجد قناة", MessageBox.TYPE_ERROR)
 
     def do_auto(self, service):
         try:
@@ -155,9 +154,9 @@ class BISSPro(Screen):
             m = re.search(re.escape(curr_freq) + r'.*?' + re.escape(ch_name.split()[0].lower()) + r'.*?(([0-9A-Fa-f]{2}[\s\t]*){8})', raw_data, re.I | re.S)
             if m:
                 key = m.group(1).replace(" ", "").upper()
-                if self.save_biss_key(combined_id, key, ch_name): self.res = (True, f"Found: {key}")
-                else: self.res = (False, "Save Error")
-            else: self.res = (False, "Not Found")
+                if self.save_biss_key(combined_id, key, ch_name): self.res = (True, f"تم العثور: {key}")
+                else: self.res = (False, "خطأ في الحفظ")
+            else: self.res = (False, "لم يتم العثور على شفرة")
         except Exception as e: self.res = (False, str(e))
         self.timer.start(100, True)
 
@@ -166,13 +165,13 @@ class BissManagerList(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1000)},{self.ui.px(700)}" title="BissPro - Key Editor">
+        <screen position="center,center" size="{self.ui.px(1000)},{self.ui.px(700)}" title="BissPro - محرر الشفرات">
             <widget name="keylist" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(960)},{self.ui.px(520)}" itemHeight="{self.ui.px(50)}" scrollbarMode="showOnDemand" />
             <eLabel position="0,{self.ui.px(560)}" size="{self.ui.px(1000)},{self.ui.px(140)}" backgroundColor="#252525" zPosition="-1" />
             <eLabel position="{self.ui.px(30)},{self.ui.px(590)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#00ff00" />
-            <eLabel text="GREEN: Edit Key" position="{self.ui.px(75)},{self.ui.px(585)}" size="{self.ui.px(300)},{self.ui.px(40)}" font="Regular;26" transparent="1" />
+            <eLabel text="أخضر: تعديل" position="{self.ui.px(75)},{self.ui.px(585)}" size="{self.ui.px(300)},{self.ui.px(40)}" font="Regular;26" transparent="1" />
             <eLabel position="{self.ui.px(30)},{self.ui.px(635)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ff0000" />
-            <eLabel text="RED: Delete" position="{self.ui.px(75)},{self.ui.px(630)}" size="{self.ui.px(300)},{self.ui.px(40)}" font="Regular;26" transparent="1" />
+            <eLabel text="أحمر: حذف" position="{self.ui.px(75)},{self.ui.px(630)}" size="{self.ui.px(300)},{self.ui.px(40)}" font="Regular;26" transparent="1" />
         </screen>"""
         self["keylist"] = MenuList([])
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {"green": self.edit_key, "cancel": self.close, "red": self.delete_confirm}, -1)
@@ -212,7 +211,7 @@ class BissManagerList(Screen):
 
     def delete_confirm(self):
         current = self["keylist"].getCurrent()
-        if current: self.session.openWithCallback(self.delete_key, MessageBox, "Delete this key?", MessageBox.TYPE_YESNO)
+        if current: self.session.openWithCallback(self.delete_key, MessageBox, "هل تريد حذف هذه الشفرة؟", MessageBox.TYPE_YESNO)
 
     def delete_key(self, answer):
         if answer:
@@ -230,12 +229,12 @@ class HexInputScreen(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="1000,600" title="BISS Editor Pro" backgroundColor="#1a1a1a">
+        <screen position="center,center" size="1000,600" title="لوحة إدخال الشفرة" backgroundColor="#1a1a1a">
             <widget name="channel" position="10,20" size="980,60" font="Regular;42" halign="center" foregroundColor="#00ff00" transparent="1" />
             <eLabel position="200,100" size="600,15" backgroundColor="#333333" zPosition="1" />
             <widget name="progress" position="200,100" size="600,15" foregroundColor="#00ff00" zPosition="2" />
             <widget name="keylabel" position="10,140" size="980,120" font="Regular;75" halign="center" foregroundColor="#f0a30a" transparent="1" />
-            <eLabel text="Use UP/DOWN to change Char | LEFT/RIGHT to navigate" position="10,280" size="980,30" font="Regular;20" halign="center" foregroundColor="#888888" transparent="1" />
+            <eLabel text="استخدم الأسهم لتغيير الرموز | يمين ويسار للتنقل" position="10,280" size="980,30" font="Regular;20" halign="center" foregroundColor="#888888" transparent="1" />
             <widget name="char_list" position="10,330" size="980,80" font="Regular;45" halign="center" foregroundColor="#ffffff" transparent="1" />
             <eLabel position="0,520" size="1000,80" backgroundColor="#252525" zPosition="-1" />
             <eLabel position="30,545" size="25,25" backgroundColor="#ff0000" zPosition="1" />
@@ -249,8 +248,8 @@ class HexInputScreen(Screen):
         </screen>"""
         self["channel"] = Label(f"{channel_name}")
         self["keylabel"] = Label(""); self["char_list"] = Label(""); self["progress"] = ProgressBar()
-        self["key_red"] = Label("EXIT"); self["key_green"] = Label("SAVE")
-        self["key_yellow"] = Label("CLEAR"); self["key_blue"] = Label("RESET")
+        self["key_red"] = Label("خروج"); self["key_green"] = Label("حفظ")
+        self["key_yellow"] = Label("مسح خانة"); self["key_blue"] = Label("تصفير")
         if existing_key and len(existing_key) == 16: self.key_list = list(existing_key.upper())
         else: self.key_list = ["0"] * 16
         self.index = 0; self.chars = ["A","B","C","D","E","F"]; self.char_index = 0
@@ -287,4 +286,4 @@ class HexInputScreen(Screen):
     def save(self): self.close("".join(self.key_list))
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro Smart", description="Auto Manager v1.0 Smart Sync", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro Smart", description="إدارة شفرات البيس تلقائياً", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
