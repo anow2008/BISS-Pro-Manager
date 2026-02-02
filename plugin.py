@@ -5,12 +5,14 @@ from Screens.MessageBox import MessageBox
 from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
+from Components.ProgressBar import ProgressBar
 from Components.MultiContent import MultiContentEntryText
 from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_VALIGN_CENTER
 import os, re, shutil, time
 from urllib.request import urlopen, urlretrieve
 from threading import Thread
 
+# ... (نفس الدوال السابقة get_softcam_path و restart_softcam_global بدون تغيير) ...
 def get_softcam_path():
     paths = ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/ncam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key", "/usr/keys/SoftCam.Key"]
     for p in paths:
@@ -81,8 +83,7 @@ class BISSPro(Screen):
         if service: self.session.openWithCallback(self.manual_done, HexInputScreen, service.info().getName())
         else: self.session.open(MessageBox, "No Active Channel!", MessageBox.TYPE_ERROR)
 
-    def action_editor(self):
-        self.session.open(BissManagerList)
+    def action_editor(self): self.session.open(BissManagerList)
 
     def manual_done(self, key=None):
         if not key: return
@@ -156,9 +157,7 @@ class BissManagerList(Screen):
             <eLabel text="RED: Delete" position="{self.ui.px(75)},{self.ui.px(630)}" size="{self.ui.px(300)},{self.ui.px(40)}" font="Regular;26" transparent="1" />
         </screen>"""
         self["keylist"] = MenuList([])
-        self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {
-            "green": self.edit_key, "cancel": self.close, "red": self.delete_confirm
-        }, -1)
+        self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {"green": self.edit_key, "cancel": self.close, "red": self.delete_confirm}, -1)
         self.onLayoutFinish.append(self.load_keys)
 
     def load_keys(self):
@@ -175,9 +174,8 @@ class BissManagerList(Screen):
             parts = current.split()
             if len(parts) >= 4:
                 ch_name = current.split(";")[-1] if ";" in current else "Unknown"
-                old_key = parts[3] # الشفرة الموجودة حالياً
                 self.old_line = current
-                self.session.openWithCallback(self.finish_edit, HexInputScreen, ch_name, old_key)
+                self.session.openWithCallback(self.finish_edit, HexInputScreen, ch_name, parts[3])
 
     def finish_edit(self, new_key=None):
         if new_key is None: return
@@ -214,28 +212,36 @@ class HexInputScreen(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="1000,550" title="BISS Editor" backgroundColor="#1a1a1a">
+        <screen position="center,center" size="1000,600" title="BISS Editor Pro" backgroundColor="#1a1a1a">
             <widget name="channel" position="10,20" size="980,60" font="Regular;42" halign="center" foregroundColor="#00ff00" transparent="1" />
-            <eLabel text="Use UP/DOWN to change Letters (A-F)" position="10,85" size="980,35" font="Regular;22" halign="center" foregroundColor="#aaaaaa" transparent="1" />
-            <eLabel text="Use LEFT/RIGHT or Numbers to move" position="10,115" size="980,35" font="Regular;22" halign="center" foregroundColor="#aaaaaa" transparent="1" />
-            <widget name="keylabel" position="10,170" size="980,120" font="Regular;80" halign="center" foregroundColor="#f0a30a" transparent="1" />
-            <widget name="char_list" position="10,320" size="980,80" font="Regular;45" halign="center" foregroundColor="#ffffff" transparent="1" />
-            <eLabel position="0,470" size="1000,80" backgroundColor="#252525" zPosition="-1" />
-            <eLabel position="30,495" size="25,25" backgroundColor="#ff0000" zPosition="1" />
-            <widget name="key_red" position="65,490" size="160,35" font="Regular;24" halign="left" transparent="1" />
-            <eLabel position="270,495" size="25,25" backgroundColor="#00ff00" zPosition="1" />
-            <widget name="key_green" position="305,490" size="160,35" font="Regular;24" halign="left" transparent="1" />
-            <eLabel position="510,495" size="25,25" backgroundColor="#ffff00" zPosition="1" />
-            <widget name="key_yellow" position="545,490" size="160,35" font="Regular;24" halign="left" transparent="1" />
-            <eLabel position="750,495" size="25,25" backgroundColor="#0000ff" zPosition="1" />
-            <widget name="key_blue" position="785,490" size="160,35" font="Regular;24" halign="left" transparent="1" />
+            
+            <eLabel position="200,100" size="600,15" backgroundColor="#333333" zPosition="1" />
+            <widget name="progress" position="200,100" size="600,15" foregroundColor="#00ff00" zPosition="2" />
+            
+            <widget name="keylabel" position="10,140" size="980,120" font="Regular;75" halign="center" foregroundColor="#f0a30a" transparent="1" />
+            
+            <eLabel text="Use UP/DOWN to change Char | LEFT/RIGHT to navigate" position="10,280" size="980,30" font="Regular;20" halign="center" foregroundColor="#888888" transparent="1" />
+            
+            <widget name="char_list" position="10,330" size="980,80" font="Regular;45" halign="center" foregroundColor="#ffffff" transparent="1" />
+            
+            <eLabel position="0,520" size="1000,80" backgroundColor="#252525" zPosition="-1" />
+            <eLabel position="30,545" size="25,25" backgroundColor="#ff0000" zPosition="1" />
+            <widget name="key_red" position="65,540" size="160,35" font="Regular;24" halign="left" transparent="1" />
+            <eLabel position="270,545" size="25,25" backgroundColor="#00ff00" zPosition="1" />
+            <widget name="key_green" position="305,540" size="160,35" font="Regular;24" halign="left" transparent="1" />
+            <eLabel position="510,545" size="25,25" backgroundColor="#ffff00" zPosition="1" />
+            <widget name="key_yellow" position="545,540" size="160,35" font="Regular;24" halign="left" transparent="1" />
+            <eLabel position="750,545" size="25,25" backgroundColor="#0000ff" zPosition="1" />
+            <widget name="key_blue" position="785,540" size="160,35" font="Regular;24" halign="left" transparent="1" />
         </screen>"""
+        
         self["channel"] = Label(f"{channel_name}")
-        self["keylabel"] = Label(""); self["char_list"] = Label("")
+        self["keylabel"] = Label("")
+        self["char_list"] = Label("")
+        self["progress"] = ProgressBar()
         self["key_red"] = Label("EXIT"); self["key_green"] = Label("SAVE")
         self["key_yellow"] = Label("CLEAR"); self["key_blue"] = Label("RESET")
         
-        # لو فيه شفرة مبعوتة بنستخدمها، لو مفيش بنحط أصفار
         if existing_key and len(existing_key) == 16:
             self.key_list = list(existing_key.upper())
         else:
@@ -253,8 +259,26 @@ class HexInputScreen(Screen):
         self.update_display()
 
     def update_display(self):
-        d_text = "".join(["[%s]" % self.key_list[i] if i == self.index else self.key_list[i] for i in range(16)])
-        self["keylabel"].setText(d_text)
+        # منطق تقسيم الشفرة كل 4 خانات
+        display_parts = []
+        for i in range(16):
+            char = self.key_list[i]
+            if i == self.index:
+                display_parts.append("[%s]" % char)
+            else:
+                display_parts.append(char)
+            
+            # إضافة فاصل بعد كل 4 خانات ما عدا الأخيرة
+            if (i + 1) % 4 == 0 and i < 15:
+                display_parts.append("  -  ")
+        
+        self["keylabel"].setText("".join(display_parts))
+        
+        # تحديث شريط التقدم (من 0 إلى 100)
+        # نحسب النسبة بناءً على مكان المؤشر الحالي
+        progress_val = int(((self.index + 1) / 16.0) * 100)
+        self["progress"].setValue(progress_val)
+        
         current_char = self.chars[self.char_index]
         self["char_list"].setText("  ".join(self.chars).replace(current_char, "> %s <" % current_char))
 
