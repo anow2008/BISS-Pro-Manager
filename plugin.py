@@ -165,21 +165,26 @@ class HexInputScreen(Screen):
     def __init__(self, session, channel_name=""):
         self.ui = AutoScale()
         Screen.__init__(self, session)
-        # إزالة الاعتماد على الخطوط الخارجية واستخدام إحداثيات مركزية
         self.skin = f"""
-        <screen position="center,center" size="1000,500" title="BISS Key Editor" backgroundColor="#101010">
-            <widget name="channel" position="10,20" size="980,50" font="Regular;30" halign="center" transparent="1" foregroundColor="#ffffff" />
+        <screen position="center,center" size="1000,500" title="BISS Key Editor" backgroundColor="#1a1a1a">
+            <widget name="channel" position="10,20" size="980,50" font="Regular;32" halign="center" transparent="1" foregroundColor="#ffffff" />
+            <widget name="keylabel" position="10,100" size="980,100" font="Regular;65" halign="center" foregroundColor="#f0a30a" transparent="1" />
+            <eLabel text="Select Char (Up/Down) then press OK:" position="10,220" size="980,40" font="Regular;26" halign="center" foregroundColor="#aaaaaa" transparent="1" />
+            <widget name="char_list" position="10,270" size="980,80" font="Regular;42" halign="center" foregroundColor="#00ff00" transparent="1" />
             
-            <widget name="keylabel" position="10,100" size="980,100" font="Regular;60" halign="center" foregroundColor="#f0a30a" transparent="1" />
+            <eLabel position="0,420" size="1000,80" backgroundColor="#252525" zPosition="-1" />
             
-            <eLabel text="Select Char (Up/Down) then press OK:" position="10,220" size="980,40" font="Regular;25" halign="center" foregroundColor="#ffffff" transparent="1" />
-            <widget name="char_list" position="10,270" size="980,80" font="Regular;45" halign="center" foregroundColor="#00ff00" transparent="1" />
+            <eLabel position="30,445" size="25,25" backgroundColor="#ff0000" zPosition="1" />
+            <widget name="key_red" position="65,440" size="160,35" font="Regular;24" halign="left" transparent="1" foregroundColor="#ffffff" />
             
-            <eLabel position="0,420" size="1000,80" backgroundColor="#202020" />
-            <widget name="key_red" position="20,440" size="200,40" font="Regular;22" halign="center" foregroundColor="#ff0000" />
-            <widget name="key_green" position="260,440" size="200,40" font="Regular;22" halign="center" foregroundColor="#00ff00" />
-            <widget name="key_yellow" position="500,440" size="200,40" font="Regular;22" halign="center" foregroundColor="#ffff00" />
-            <widget name="key_blue" position="740,440" size="200,40" font="Regular;22" halign="center" foregroundColor="#0000ff" />
+            <eLabel position="270,445" size="25,25" backgroundColor="#00ff00" zPosition="1" />
+            <widget name="key_green" position="305,440" size="160,35" font="Regular;24" halign="left" transparent="1" foregroundColor="#ffffff" />
+            
+            <eLabel position="510,445" size="25,25" backgroundColor="#ffff00" zPosition="1" />
+            <widget name="key_yellow" position="545,440" size="160,35" font="Regular;24" halign="left" transparent="1" foregroundColor="#ffffff" />
+            
+            <eLabel position="750,445" size="25,25" backgroundColor="#0000ff" zPosition="1" />
+            <widget name="key_blue" position="785,440" size="160,35" font="Regular;24" halign="left" transparent="1" foregroundColor="#ffffff" />
         </screen>"""
         
         self["channel"] = Label(f"CH: {channel_name}")
@@ -213,17 +218,14 @@ class HexInputScreen(Screen):
         self.update_display()
 
     def update_display(self):
-        # عرض الشفرة الحالية
         d_text = ""
         for i in range(16):
-            if i == self.index: d_text += "_%s_" % self.key_list[i]
+            if i == self.index: d_text += "[%s]" % self.key_list[i]
             else: d_text += self.key_list[i]
-            if (i + 1) % 4 == 0 and i < 15: d_text += " "
+            if (i + 1) % 4 == 0 and i < 15: d_text += "  "
         self["keylabel"].setText(d_text)
 
-        # عرض شريط الحروف بشكل مبسط جداً لضمان الظهور
         c_text = "  ".join(self.chars)
-        # تمييز الحرف المختار بأسهم واضحة
         current_char = self.chars[self.char_index]
         c_text = c_text.replace(current_char, " >%s< " % current_char)
         self["char_list"].setText(c_text)
@@ -267,4 +269,4 @@ class HexInputScreen(Screen):
         self.close("".join(self.key_list))
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v3.3 English Fixed", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v3.3 Final English", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
