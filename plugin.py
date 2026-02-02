@@ -11,7 +11,7 @@ from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_HALIGN_LEF
 from Tools.LoadPixmap import LoadPixmap
 from threading import Thread
 from urllib.request import urlopen, urlretrieve
-import os, re, shutil
+import os, re, shutil, time
 
 def get_softcam_path():
     paths = [
@@ -39,7 +39,7 @@ class BISSPro(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v2.9">
+        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v3.0">
             <widget name="menu" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(1060)},{self.ui.px(550)}" itemHeight="{self.ui.px(110)}" scrollbarMode="showOnDemand" transparent="1"/>
             <eLabel position="{self.ui.px(50)},{self.ui.px(600)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             <widget name="progress" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(15)}" transparent="1" />
@@ -67,39 +67,43 @@ class BISSPro(Screen):
         self["menu"].l.setList(lst)
         if hasattr(self["menu"].l, 'setFont'): self["menu"].l.setFont(0, gFont("Regular", self.ui.font(32)))
 
+    def restart_softcam(self):
+        os.system("killall -9 oscam ncam vicardd gbox 2>/dev/null")
+        time.sleep(1.5)
+        scripts = ["/etc/init.d/softcam", "/etc/init.d/cardserver", "/etc/init.d/softcam.oscam", "/etc/init.d/softcam.ncam"]
+        restarted = False
+        for s in scripts:
+            if os.path.exists(s):
+                os.system(f"{s} restart >/dev/null 2>&1")
+                restarted = True; break
+        if not restarted:
+            if os.path.exists("/usr/bin/oscam"): os.system("/usr/bin/oscam -b &")
+            elif os.path.exists("/usr/bin/ncam"): os.system("/usr/bin/ncam -b &")
+
     def save_biss_key(self, full_id, key, name):
         target = get_softcam_path()
         full_sid = full_id.zfill(8).upper()
-        
         try:
-            if not os.path.exists(target):
-                os.system(f'touch {target}')
+            if not os.path.exists(target): os.system(f'touch {target}')
             os.system(f'chmod 644 {target}')
-
-            # حذف الشفرة القديمة
             os.system(f"sed -i '/F {full_sid}/d' {target}")
-
-            # إضافة الشفرة الجديدة
             new_entry = f"F {full_sid} 00000000 {key.upper()} ;{name}"
             os.system(f'echo "{new_entry}" >> {target}')
-            
-            # --- إعادة تشغيل السوفتكام لضمان التفعيل ---
-            os.system("killall -9 oscam ncam >/dev/null 2>&1")
-            if os.path.exists("/etc/init.d/softcam"):
-                os.system("/etc/init.d/softcam restart >/dev/null 2>&1")
-            elif os.path.exists("/etc/init.d/cardserver"):
-                os.system("/etc/init.d/cardserver restart >/dev/null 2>&1")
-            
+            self.restart_softcam()
             return True
-        except:
-            return False
+        except: return False
 
     def ok(self):
         curr = self["menu"].getCurrent()
         action = curr[0] if curr else None
         service = self.session.nav.getCurrentService()
         if action == "add":
-            self.session.openWithCallback(self.manual_done, HexInputScreen)
+            if service:
+                info = service.info()
+                sname = info.getName()
+                self.session.openWithCallback(self.manual_done, HexInputScreen, sname)
+            else:
+                self.session.open(MessageBox, "No Active Channel!", MessageBox.TYPE_ERROR)
         elif action in ["upd", "auto"]:
             self["progress"].setValue(30)
             if action == "upd":
@@ -114,17 +118,13 @@ class BISSPro(Screen):
         service = self.session.nav.getCurrentService()
         if not service: return
         info = service.info()
-        
-        # استخراج SID + VPID
         raw_sid = info.getInfo(iServiceInformation.sSID)
         raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
-        
         hex_sid = "%04X" % (raw_sid & 0xFFFF)
         hex_vpid = "%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000"
         combined_id = hex_sid + hex_vpid
-        
         if self.save_biss_key(combined_id, key, info.getName()):
-            self.res = (True, f"Saved & Restarted: {combined_id}")
+            self.res = (True, f"Saved & Restarted: {info.getName()}")
         else:
             self.res = (False, "Write Error")
         self.timer.start(100, True)
@@ -134,7 +134,8 @@ class BISSPro(Screen):
             urlretrieve("https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key", "/tmp/SoftCam.Key")
             shutil.copy("/tmp/SoftCam.Key", get_softcam_path())
             os.system(f"chmod 644 {get_softcam_path()}")
-            self.res = (True, "SoftCam Updated")
+            self.restart_softcam()
+            self.res = (True, "SoftCam Updated & Restarted")
         except: self.res = (False, "Download Error")
         self.timer.start(100, True)
 
@@ -143,16 +144,13 @@ class BISSPro(Screen):
             info = service.info()
             raw_sid = info.getInfo(iServiceInformation.sSID)
             raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
-            
             hex_sid = "%04X" % (raw_sid & 0xFFFF)
             hex_vpid = "%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000"
             combined_id = hex_sid + hex_vpid
-            
             raw_data = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
             m = re.search(hex_sid + r'.*?([0-9A-Fa-f]{16})', raw_data, re.I)
-            
             if m and self.save_biss_key(combined_id, m.group(1), info.getName()):
-                self.res = (True, f"Auto Saved & Restarted: {combined_id}")
+                self.res = (True, f"Auto Added: {info.getName()}")
             else:
                 self.res = (False, f"Not Found: {hex_sid}")
         except: self.res = (False, "Server Error")
@@ -164,20 +162,22 @@ class BISSPro(Screen):
         self["status"].setText("Ready"); self["progress"].setValue(0)
 
 class HexInputScreen(Screen):
-    def __init__(self, session):
+    def __init__(self, session, channel_name=""):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(800)},{self.ui.px(550)}" title="BISS Key Input">
-            <widget name="keylabel" position="20,20" size="760,60" font="Regular;{self.ui.font(44)}" halign="center" foregroundColor="#f0a30a" />
-            <widget name="hexlist" position="250,100" size="300,300" itemHeight="{self.ui.px(60)}" font="Regular;{self.ui.font(36)}" transparent="1" />
-            <ePixmap pixmap="skin_default/buttons/red.png" position="40,430" size="30,30" alphatest="on" />
-            <widget name="key_red" position="80,430" size="150,30" font="Regular;22" />
-            <ePixmap pixmap="skin_default/buttons/green.png" position="280,430" size="30,30" alphatest="on" />
-            <widget name="key_green" position="320,430" size="150,30" font="Regular;22" />
-            <ePixmap pixmap="skin_default/buttons/yellow.png" position="520,430" size="30,30" alphatest="on" />
-            <widget name="key_yellow" position="560,430" size="150,30" font="Regular;22" />
+        <screen position="center,center" size="{self.ui.px(800)},{self.ui.px(600)}" title="BISS Key Input">
+            <widget name="channel" position="20,20" size="760,50" font="Regular;{self.ui.font(32)}" halign="center" foregroundColor="#ffffff" />
+            <widget name="keylabel" position="20,80" size="760,60" font="Regular;{self.ui.font(44)}" halign="center" foregroundColor="#f0a30a" />
+            <widget name="hexlist" position="250,160" size="300,300" itemHeight="{self.ui.px(60)}" font="Regular;{self.ui.font(36)}" transparent="1" />
+            <ePixmap pixmap="skin_default/buttons/red.png" position="40,540" size="30,30" alphatest="on" />
+            <widget name="key_red" position="80,540" size="150,30" font="Regular;22" />
+            <ePixmap pixmap="skin_default/buttons/green.png" position="280,540" size="30,30" alphatest="on" />
+            <widget name="key_green" position="320,540" size="150,30" font="Regular;22" />
+            <ePixmap pixmap="skin_default/buttons/yellow.png" position="520,540" size="30,30" alphatest="on" />
+            <widget name="key_yellow" position="560,540" size="150,30" font="Regular;22" />
         </screen>"""
+        self["channel"] = Label(f"Channel: {channel_name}")
         self["keylabel"] = Label("____ ____ ____ ____")
         self["key_red"] = Label("Exit"); self["key_green"] = Label("Save"); self["key_yellow"] = Label("Delete")
         self.key = ""
@@ -201,4 +201,4 @@ class HexInputScreen(Screen):
         else: self.session.open(MessageBox, "16 digits required!", MessageBox.TYPE_ERROR)
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v2.9 (Restart Fixed)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v3.0 (Smart Sync)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
