@@ -208,7 +208,6 @@ class BissManagerList(Screen):
                 if os.path.exists(path):
                     with open(path, "r") as f:
                         lines = f.readlines()
-                    # استبعاد السطر المختار بدقة
                     new_lines = [l for l in lines if l.strip() != current.strip()]
                     with open(path, "w") as f:
                         f.writelines(new_lines)
@@ -221,25 +220,33 @@ class HexInputScreen(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="1000,500" title="BISS Editor" backgroundColor="#1a1a1a">
-            <widget name="channel" position="10,20" size="980,50" font="Regular;32" halign="center" transparent="1" />
-            <widget name="keylabel" position="10,100" size="980,100" font="Regular;65" halign="center" foregroundColor="#f0a30a" transparent="1" />
-            <widget name="char_list" position="10,270" size="980,80" font="Regular;42" halign="center" foregroundColor="#00ff00" transparent="1" />
-            <eLabel position="0,420" size="1000,80" backgroundColor="#252525" zPosition="-1" />
-            <eLabel position="30,445" size="25,25" backgroundColor="#ff0000" zPosition="1" />
-            <widget name="key_red" position="65,440" size="160,35" font="Regular;24" halign="left" transparent="1" />
-            <eLabel position="270,445" size="25,25" backgroundColor="#00ff00" zPosition="1" />
-            <widget name="key_green" position="305,440" size="160,35" font="Regular;24" halign="left" transparent="1" />
-            <eLabel position="510,445" size="25,25" backgroundColor="#ffff00" zPosition="1" />
-            <widget name="key_yellow" position="545,440" size="160,35" font="Regular;24" halign="left" transparent="1" />
-            <eLabel position="750,445" size="25,25" backgroundColor="#0000ff" zPosition="1" />
-            <widget name="key_blue" position="785,440" size="160,35" font="Regular;24" halign="left" transparent="1" />
+        <screen position="center,center" size="1000,550" title="BISS Editor" backgroundColor="#1a1a1a">
+            <widget name="channel" position="10,20" size="980,60" font="Regular;42" halign="center" foregroundColor="#00ff00" transparent="1" />
+            <eLabel text="Use UP/DOWN to change Letters (A-F)" position="10,85" size="980,35" font="Regular;22" halign="center" foregroundColor="#aaaaaa" transparent="1" />
+            <eLabel text="Use LEFT/RIGHT or Numbers to move" position="10,115" size="980,35" font="Regular;22" halign="center" foregroundColor="#aaaaaa" transparent="1" />
+            <widget name="keylabel" position="10,170" size="980,120" font="Regular;80" halign="center" foregroundColor="#f0a30a" transparent="1" />
+            <widget name="char_list" position="10,320" size="980,80" font="Regular;45" halign="center" foregroundColor="#ffffff" transparent="1" />
+            <eLabel position="0,470" size="1000,80" backgroundColor="#252525" zPosition="-1" />
+            <eLabel position="30,495" size="25,25" backgroundColor="#ff0000" zPosition="1" />
+            <widget name="key_red" position="65,490" size="160,35" font="Regular;24" halign="left" transparent="1" />
+            <eLabel position="270,495" size="25,25" backgroundColor="#00ff00" zPosition="1" />
+            <widget name="key_green" position="305,490" size="160,35" font="Regular;24" halign="left" transparent="1" />
+            <eLabel position="510,495" size="25,25" backgroundColor="#ffff00" zPosition="1" />
+            <widget name="key_yellow" position="545,490" size="160,35" font="Regular;24" halign="left" transparent="1" />
+            <eLabel position="750,495" size="25,25" backgroundColor="#0000ff" zPosition="1" />
+            <widget name="key_blue" position="785,490" size="160,35" font="Regular;24" halign="left" transparent="1" />
         </screen>"""
-        self["channel"] = Label(f"CH: {channel_name}")
-        self["keylabel"] = Label(""); self["char_list"] = Label("")
-        self["key_red"] = Label("EXIT"); self["key_green"] = Label("SAVE")
-        self["key_yellow"] = Label("CLEAR"); self["key_blue"] = Label("RESET")
-        self.key_list = ["0"] * 16; self.index = 0; self.chars = ["A","B","C","D","E","F"]; self.char_index = 0
+        self["channel"] = Label(f"{channel_name}")
+        self["keylabel"] = Label("")
+        self["char_list"] = Label("")
+        self["key_red"] = Label("EXIT")
+        self["key_green"] = Label("SAVE")
+        self["key_yellow"] = Label("CLEAR")
+        self["key_blue"] = Label("RESET")
+        self.key_list = ["0"] * 16
+        self.index = 0
+        self.chars = ["A","B","C","D","E","F"]
+        self.char_index = 0
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions", "DirectionActions"], {
             "ok": self.confirm_digit, "cancel": self.close, "red": self.close, "green": self.save,
             "yellow": self.clear_current_digit, "blue": self.clear_all, "left": self.move_left, "right": self.move_right,
@@ -252,7 +259,7 @@ class HexInputScreen(Screen):
         d_text = "".join(["[%s]" % self.key_list[i] if i == self.index else self.key_list[i] for i in range(16)])
         self["keylabel"].setText(d_text)
         current_char = self.chars[self.char_index]
-        self["char_list"].setText("  ".join(self.chars).replace(current_char, " >%s< " % current_char))
+        self["char_list"].setText("  ".join(self.chars).replace(current_char, "> %s <" % current_char))
 
     def move_char_up(self): self.char_index = (self.char_index - 1) % len(self.chars); self.update_display()
     def move_char_down(self): self.char_index = (self.char_index + 1) % len(self.chars); self.update_display()
