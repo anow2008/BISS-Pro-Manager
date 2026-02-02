@@ -7,7 +7,7 @@ from Components.MenuList import MenuList
 from Components.Label import Label
 from Components.ProgressBar import ProgressBar
 from Components.MultiContent import MultiContentEntryPixmapAlphaTest, MultiContentEntryText
-from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_HALIGN_LEFT, RT_VALIGN_CENTER
+from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_HALIGN_LEFT, RT_VALIGN_CENTER, RT_HALIGN_CENTER
 from Tools.LoadPixmap import LoadPixmap
 from threading import Thread
 from urllib.request import urlopen, urlretrieve
@@ -39,7 +39,7 @@ class BISSPro(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v3.2">
+        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v3.3">
             <widget name="menu" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(1060)},{self.ui.px(550)}" itemHeight="{self.ui.px(110)}" scrollbarMode="showOnDemand" transparent="1"/>
             <eLabel position="{self.ui.px(50)},{self.ui.px(600)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             <widget name="progress" position="{self.ui.px(50)},{self.ui.px(620)}" size="{self.ui.px(1000)},{self.ui.px(15)}" transparent="1" />
@@ -166,35 +166,49 @@ class HexInputScreen(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(950)},{self.ui.px(550)}" title="BISS Editor v3.2" backgroundColor="#1a1a1a">
+        <screen position="center,center" size="{self.ui.px(950)},{self.ui.px(550)}" title="BISS Editor v3.3" backgroundColor="#1a1a1a">
             <eLabel position="0,0" size="950,70" backgroundColor="#252525" zPosition="-1" />
-            <widget name="channel" position="20,15" size="910,40" font="Regular;{self.ui.font(34)}" halign="center" foregroundColor="#ffffff" transparent="1" />
-            <widget name="keylabel" position="50,100" size="850,80" font="Regular;{self.ui.font(60)}" halign="center" foregroundColor="#f0a30a" transparent="1" />
-            <eLabel position="50,220" size="850,100" backgroundColor="#000000" cornerRadius="10" />
-            <widget name="char_list" position="50,235" size="850,70" font="Regular;{self.ui.font(45)}" halign="center" foregroundColor="#ffffff" transparent="1" />
+            <widget name="channel" position="20,15" size="910,40" font="Regular;{self.ui.font(32)}" halign="center" foregroundColor="#ffffff" transparent="1" />
+            
+            <widget name="keylabel" position="20,100" size="910,80" font="Regular;{self.ui.font(60)}" halign="center" foregroundColor="#f0a30a" transparent="1" />
+            
+            <eLabel position="20,220" size="910,100" backgroundColor="#000000" cornerRadius="10" />
+            <widget name="char_list" position="30,235" size="890,70" font="Regular;{self.ui.font(38)}" halign="center" foregroundColor="#ffffff" transparent="1" noWrap="1" />
+            
             <eLabel position="0,450" size="950,100" backgroundColor="#252525" zPosition="-1" />
-            <eLabel position="30,488" size="20,20" backgroundColor="#ff0000" />
-            <widget name="key_red" position="55,483" size="160,35" font="Regular;20" halign="left" transparent="1" />
+            <eLabel position="25,488" size="20,20" backgroundColor="#ff0000" />
+            <widget name="key_red" position="50,483" size="180,35" font="Regular;18" halign="left" transparent="1" />
             <eLabel position="240,488" size="20,20" backgroundColor="#00ff00" />
-            <widget name="key_green" position="265,483" size="160,35" font="Regular;20" halign="left" transparent="1" />
+            <widget name="key_green" position="265,483" size="180,35" font="Regular;18" halign="left" transparent="1" />
             <eLabel position="460,488" size="20,20" backgroundColor="#ffff00" />
-            <widget name="key_yellow" position="485,483" size="200,35" font="Regular;20" halign="left" transparent="1" />
+            <widget name="key_yellow" position="485,483" size="200,35" font="Regular;18" halign="left" transparent="1" />
             <eLabel position="710,488" size="20,20" backgroundColor="#0000ff" />
-            <widget name="key_blue" position="735,483" size="200,35" font="Regular;20" halign="left" transparent="1" />
+            <widget name="key_blue" position="735,483" size="200,35" font="Regular;18" halign="left" transparent="1" />
         </screen>"""
         self["channel"] = Label(f"Channel: {channel_name}")
-        self["keylabel"] = Label(""); self["char_list"] = Label("")
-        self["key_red"] = Label("Exit"); self["key_green"] = Label("Save")
-        self["key_yellow"] = Label("Clear Digit"); self["key_blue"] = Label("Clear All")
-        self.key_list = ["0"] * 16; self.index = 0
+        self["keylabel"] = Label("")
+        self["char_list"] = Label("")
+        self["key_red"] = Label("خروج")
+        self["key_green"] = Label("حفظ")
+        self["key_yellow"] = Label("مسح رقم") 
+        self["key_blue"] = Label("مسح الكل")
+        
+        self.key_list = ["0"] * 16
+        self.index = 0
         self.chars = ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"]
         self.char_index = 0
+        
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions", "DirectionActions"], {
-            "ok": self.confirm_digit, "cancel": lambda: self.close(None),
-            "red": lambda: self.close(None), "green": self.save,
-            "yellow": self.clear_current_digit, "blue": self.clear_all,
-            "left": self.move_left, "right": self.move_right,
-            "up": self.move_char_left, "down": self.move_char_right,
+            "ok": self.confirm_digit, 
+            "cancel": lambda: self.close(None),
+            "red": lambda: self.close(None), 
+            "green": self.save,
+            "yellow": self.clear_current_digit, 
+            "blue": self.clear_all,
+            "left": self.move_left, 
+            "right": self.move_right,
+            "up": self.move_char_left, 
+            "down": self.move_char_right,
             "0": lambda: self.keyNum("0"), "1": lambda: self.keyNum("1"), "2": lambda: self.keyNum("2"), 
             "3": lambda: self.keyNum("3"), "4": lambda: self.keyNum("4"), "5": lambda: self.keyNum("5"), 
             "6": lambda: self.keyNum("6"), "7": lambda: self.keyNum("7"), "8": lambda: self.keyNum("8"), 
@@ -208,16 +222,21 @@ class HexInputScreen(Screen):
             else: d_text += self.key_list[i]
             if (i + 1) % 4 == 0 and i < 15: d_text += "  "
         self["keylabel"].setText(d_text)
+
         c_text = ""
         for i in range(len(self.chars)):
-            if i == self.char_index: c_text += f" >{self.chars[i]}< "
-            else: c_text += f" {self.chars[i]} "
+            if i == self.char_index:
+                c_text += f" >{self.chars[i]}< "
+            else:
+                c_text += f"  {self.chars[i]}  "
         self["char_list"].setText(c_text)
 
     def move_char_left(self):
-        self.char_index = (self.char_index - 1) % len(self.chars); self.update_display()
+        self.char_index = (self.char_index - 1) % len(self.chars)
+        self.update_display()
     def move_char_right(self):
-        self.char_index = (self.char_index + 1) % len(self.chars); self.update_display()
+        self.char_index = (self.char_index + 1) % len(self.chars)
+        self.update_display()
     def confirm_digit(self):
         self.key_list[self.index] = self.chars[self.char_index]
         if self.index < 15: self.index += 1
@@ -238,4 +257,4 @@ class HexInputScreen(Screen):
         self.close("".join(self.key_list))
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v1.0 (Full Pro)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v3.3 (Skin Fixed)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
