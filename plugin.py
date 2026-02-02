@@ -6,12 +6,12 @@ from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
 from Components.MultiContent import MultiContentEntryText
-from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_VALIGN_CENTER, RT_HALIGN_LEFT
+from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_VALIGN_CENTER
 import os, re, shutil, time
 from urllib.request import urlopen, urlretrieve
 from threading import Thread
 
-# مسارات ملف الشفرات الشائعة
+# تحديد مسار ملف الشفرات تلقائياً
 def get_softcam_path():
     paths = [
         "/etc/tuxbox/config/oscam/SoftCam.Key",
@@ -25,11 +25,11 @@ def get_softcam_path():
 
 def restart_softcam_global():
     os.system("killall -9 oscam ncam vicardd gbox 2>/dev/null")
-    time.sleep(1.5)
+    time.sleep(1.2)
     scripts = ["/etc/init.d/softcam", "/etc/init.d/cardserver", "/etc/init.d/softcam.oscam", "/etc/init.d/softcam.ncam"]
     for s in scripts:
         if os.path.exists(s):
-            os.system(f"{s} restart >/dev/null 2>&1")
+            os.system(f"'{s}' restart >/dev/null 2>&1")
             break
 
 class AutoScale:
@@ -44,7 +44,7 @@ class BISSPro(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v1.0">
+        <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Manager v1.0 - Smart Sync">
             <widget name="menu" position="{self.ui.px(50)},{self.ui.px(30)}" size="{self.ui.px(1000)},{self.ui.px(450)}" itemHeight="{self.ui.px(90)}" scrollbarMode="showOnDemand" transparent="1"/>
             <eLabel position="{self.ui.px(50)},{self.ui.px(500)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             <eLabel position="{self.ui.px(70)},{self.ui.px(540)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#00ff00" />
@@ -69,7 +69,7 @@ class BISSPro(Screen):
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        items = [("Add BISS Manually", "add"), ("Update SoftCam.Key File", "upd"), ("Auto Search Online", "auto"), ("Manage / Delete Stored Keys", "manage")]
+        items = [("Add BISS Manually", "add"), ("Update SoftCam.Key File", "upd"), ("Smart Auto Search (Internet)", "auto"), ("Manage Keys", "manage")]
         lst = []
         for text, action in items:
             lst.append((action, [MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(15)), size=(self.ui.px(950), self.ui.px(60)), font=0, text=text, flags=RT_VALIGN_CENTER)]))
@@ -77,13 +77,11 @@ class BISSPro(Screen):
         if hasattr(self["menu"].l, 'setFont'): self["menu"].l.setFont(0, gFont("Regular", self.ui.font(34)))
 
     def ok(self):
-        curr = self["menu"].getCurrent()
-        if curr:
-            act = curr[0]
-            if act == "add": self.action_add()
-            elif act == "upd": self.action_update()
-            elif act == "auto": self.action_auto()
-            elif act == "manage": self.action_manage()
+        curr = self["menu"].getCurrent(); act = curr[0] if curr else ""
+        if act == "add": self.action_add()
+        elif act == "upd": self.action_update()
+        elif act == "auto": self.action_auto()
+        elif act == "manage": self.action_manage()
 
     def action_add(self):
         service = self.session.nav.getCurrentService()
@@ -97,8 +95,10 @@ class BISSPro(Screen):
     def action_auto(self):
         service = self.session.nav.getCurrentService()
         if service:
-            self["status"].setText("Searching Online...")
+            self["status"].setText("Searching Online (DVB-S2 Smart Mode)...")
             Thread(target=self.do_auto, args=(service,)).start()
+        else:
+            self.session.open(MessageBox, "Please stand on a channel first!", MessageBox.TYPE_ERROR)
 
     def action_manage(self):
         self.session.open(BissManagerList)
@@ -111,14 +111,14 @@ class BISSPro(Screen):
         raw_sid = info.getInfo(iServiceInformation.sSID)
         raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
         combined_id = ("%04X" % (raw_sid & 0xFFFF)) + ("%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000")
-        if self.save_biss_key(combined_id, key, info.getName()): self.res = (True, f"Key Saved: {info.getName()}")
+        if self.save_biss_key(combined_id, key, info.getName()): self.res = (True, f"Saved: {info.getName()}")
         else: self.res = (False, "File Error")
         self.timer.start(100, True)
 
     def save_biss_key(self, full_id, key, name):
         target = get_softcam_path()
         try:
-            os.system(f"sed -i '/F {full_id.upper()}/d' {target}")
+            os.system(f"sed -i '/F {full_id.upper()}/d' '{target}'")
             with open(target, "a") as f: f.write(f"F {full_id.upper()} 00000000 {key.upper()} ;{name}\n")
             restart_softcam_global()
             return True
@@ -134,13 +134,42 @@ class BISSPro(Screen):
 
     def do_auto(self, service):
         try:
-            info = service.info(); raw_sid = info.getInfo(iServiceInformation.sSID); hex_sid = "%04X" % (raw_sid & 0xFFFF)
-            raw_vpid = info.getInfo(iServiceInformation.sVideoPID); hex_vpid = "%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000"
+            info = service.info()
+            ch_name = info.getName().strip().lower()
+            search_name = ch_name.split()[0] if ch_name else "unknown"
+            
+            # جلب بيانات التردد بدقة
+            t_data = info.getInfoObject(iServiceInformation.sTransponderData)
+            freq_val = t_data.get("frequency", 0)
+            if freq_val > 50000: freq_val /= 1000 # تحويل Hz إلى MHz إن وجد
+            curr_freq = str(int(freq_val))
+            
+            # جلب الاستقطاب لتعزيز دقة البحث
+            pol_id = t_data.get("polarization", -1)
+            pol_str = {0: "H", 1: "V", 2: "L", 3: "R"}.get(pol_id, "")
+
+            # معرفات القناة للحفظ
+            raw_sid = info.getInfo(iServiceInformation.sSID)
+            combined_id = ("%04X" % (raw_sid & 0xFFFF)) + ("%04X" % (info.getInfo(iServiceInformation.sVideoPID) & 0xFFFF))
+
+            # تحميل قاعدة بيانات الشفرات
             raw_data = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
-            m = re.search(hex_sid + r'.*?([0-9A-Fa-f]{16})', raw_data, re.I)
-            if m and self.save_biss_key(hex_sid + hex_vpid, m.group(1), info.getName()): self.res = (True, "Key Found")
-            else: self.res = (False, "Not Found")
-        except: self.res = (False, "Error")
+            
+            # Regex مطور يشمل التردد + الاستقطاب (اختياري) + اسم القناة + الشفرة
+            pattern = re.escape(curr_freq) + r'.*?' + re.escape(pol_str) + r'.*?' + re.escape(search_name) + r'.*?(([0-9A-Fa-f]{2}[\s\t]*){8})'
+            m = re.search(pattern, raw_data, re.I | re.S)
+            
+            if not m: # محاولة ثانية بدون استقطاب في حال عدم وجوده بالملف
+                pattern = re.escape(curr_freq) + r'.*?' + re.escape(search_name) + r'.*?(([0-9A-Fa-f]{2}[\s\t]*){8})'
+                m = re.search(pattern, raw_data, re.I | re.S)
+
+            if m:
+                clean_key = m.group(1).replace(" ", "").replace("\t", "").strip().upper()
+                if self.save_biss_key(combined_id, clean_key, info.getName()):
+                    self.res = (True, f"Found: {clean_key}\nFrequency: {curr_freq} {pol_str}")
+                else: self.res = (False, "File Save Error")
+            else: self.res = (False, f"No match for {ch_name} on {curr_freq}")
+        except Exception as e: self.res = (False, "Error: " + str(e))
         self.timer.start(100, True)
 
     def show_result(self):
@@ -164,8 +193,7 @@ class BissManagerList(Screen):
         self.onLayoutFinish.append(self.load_keys)
 
     def load_keys(self):
-        path = get_softcam_path()
-        keys = []
+        path = get_softcam_path(); keys = []
         if os.path.exists(path):
             with open(path, "r") as f:
                 for line in f:
@@ -180,7 +208,7 @@ class BissManagerList(Screen):
         if answer:
             current = self["keylist"].getCurrent(); path = get_softcam_path()
             try:
-                os.system(f"sed -i '/{re.escape(current)}/d' {path}")
+                os.system(f"sed -i '/{re.escape(current)}/d' '{path}'")
                 self.load_keys(); restart_softcam_global()
             except: pass
 
@@ -233,4 +261,4 @@ class HexInputScreen(Screen):
     def save(self): self.close("".join(self.key_list))
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v1.0 Final", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro Smart", description="Auto Manager v1.0 Smart Sync", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
