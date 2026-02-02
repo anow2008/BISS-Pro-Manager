@@ -32,7 +32,7 @@ class AutoScale:
         d = getDesktop(0).size()
         self.scale = min(d.width() / 1920.0, d.height() / 1080.0)
     def px(self, v): return int(v * self.scale)
-    def font(self, v): return int(max(18, v * self.scale))
+    def font(self, v): return int(max(20, v * self.scale))
 
 class BISSPro(Screen):
     def __init__(self, session):
@@ -165,23 +165,24 @@ class HexInputScreen(Screen):
     def __init__(self, session, channel_name=""):
         self.ui = AutoScale()
         Screen.__init__(self, session)
-        # تعديل جذري للمسافات لضمان ظهور شريط الحروف في كل الشاشات
+        # إزالة الاعتماد على الخطوط الخارجية واستخدام إحداثيات مركزية
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1000)},{self.ui.px(550)}" title="BISS Editor v3.3" backgroundColor="#1a1a1a">
-            <widget name="channel" position="10,20" size="980,50" font="Regular;{self.ui.font(32)}" halign="center" transparent="1" />
-            <widget name="keylabel" position="10,100" size="980,90" font="Regular;{self.ui.font(70)}" halign="center" foregroundColor="#f0a30a" transparent="1" />
+        <screen position="center,center" size="1000,500" title="BISS Key Editor" backgroundColor="#101010">
+            <widget name="channel" position="10,20" size="980,50" font="Regular;30" halign="center" transparent="1" foregroundColor="#ffffff" />
             
-            <eLabel text="Selection (Use Up/Down &amp; OK):" position="10,210" size="980,40" font="Regular;{self.ui.font(24)}" halign="center" foregroundColor="#aaaaaa" transparent="1" />
-            <eLabel position="50,250" size="900,100" backgroundColor="#222222" />
-            <widget name="char_list" position="60,265" size="880,70" font="Regular;{self.ui.font(45)}" halign="center" foregroundColor="#00ff00" transparent="1" noWrap="1" />
+            <widget name="keylabel" position="10,100" size="980,100" font="Regular;60" halign="center" foregroundColor="#f0a30a" transparent="1" />
             
-            <eLabel position="0,460" size="1000,90" backgroundColor="#252525" zPosition="-1" />
-            <widget name="key_red" position="40,490" size="150,40" font="Regular;20" halign="left" transparent="1" foregroundColor="#ff0000" />
-            <widget name="key_green" position="240,490" size="150,40" font="Regular;20" halign="left" transparent="1" foregroundColor="#00ff00" />
-            <widget name="key_yellow" position="440,490" size="150,40" font="Regular;20" halign="left" transparent="1" foregroundColor="#ffff00" />
-            <widget name="key_blue" position="640,490" size="150,40" font="Regular;20" halign="left" transparent="1" foregroundColor="#0000ff" />
+            <eLabel text="Select Char (Up/Down) then press OK:" position="10,220" size="980,40" font="Regular;25" halign="center" foregroundColor="#ffffff" transparent="1" />
+            <widget name="char_list" position="10,270" size="980,80" font="Regular;45" halign="center" foregroundColor="#00ff00" transparent="1" />
+            
+            <eLabel position="0,420" size="1000,80" backgroundColor="#202020" />
+            <widget name="key_red" position="20,440" size="200,40" font="Regular;22" halign="center" foregroundColor="#ff0000" />
+            <widget name="key_green" position="260,440" size="200,40" font="Regular;22" halign="center" foregroundColor="#00ff00" />
+            <widget name="key_yellow" position="500,440" size="200,40" font="Regular;22" halign="center" foregroundColor="#ffff00" />
+            <widget name="key_blue" position="740,440" size="200,40" font="Regular;22" halign="center" foregroundColor="#0000ff" />
         </screen>"""
-        self["channel"] = Label(f"Channel: {channel_name}")
+        
+        self["channel"] = Label(f"CH: {channel_name}")
         self["keylabel"] = Label("")
         self["char_list"] = Label("")
         self["key_red"] = Label("EXIT")
@@ -212,20 +213,19 @@ class HexInputScreen(Screen):
         self.update_display()
 
     def update_display(self):
+        # عرض الشفرة الحالية
         d_text = ""
         for i in range(16):
-            if i == self.index: d_text += f"[{self.key_list[i]}]"
+            if i == self.index: d_text += "_%s_" % self.key_list[i]
             else: d_text += self.key_list[i]
-            if (i + 1) % 4 == 0 and i < 15: d_text += "  "
+            if (i + 1) % 4 == 0 and i < 15: d_text += " "
         self["keylabel"].setText(d_text)
 
-        c_text = ""
-        # عرض عدد محدود من الحروف حول الحرف المختار لضمان عدم خروج النص عن الشاشة
-        for i in range(len(self.chars)):
-            if i == self.char_index:
-                c_text += f" >{self.chars[i]}< "
-            else:
-                c_text += f" {self.chars[i]} "
+        # عرض شريط الحروف بشكل مبسط جداً لضمان الظهور
+        c_text = "  ".join(self.chars)
+        # تمييز الحرف المختار بأسهم واضحة
+        current_char = self.chars[self.char_index]
+        c_text = c_text.replace(current_char, " >%s< " % current_char)
         self["char_list"].setText(c_text)
 
     def move_char_up(self):
@@ -247,19 +247,24 @@ class HexInputScreen(Screen):
         self.update_display()
 
     def move_left(self):
-        if self.index > 0: self.index -= 1; self.update_display()
+        if self.index > 0: self.index -= 1
+        self.update_display()
 
     def move_right(self):
-        if self.index < 15: self.index += 1; self.update_display()
+        if self.index < 15: self.index += 1
+        self.update_display()
 
     def clear_current_digit(self):
-        self.key_list[self.index] = "0"; self.update_display()
+        self.key_list[self.index] = "0"
+        self.update_display()
 
     def clear_all(self):
-        self.key_list = ["0"] * 16; self.index = 0; self.update_display()
+        self.key_list = ["0"] * 16
+        self.index = 0
+        self.update_display()
 
     def save(self):
         self.close("".join(self.key_list))
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v3.3 (Skin Fixed)", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v3.3 English Fixed", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
