@@ -9,9 +9,8 @@ from Components.ProgressBar import ProgressBar
 from Components.MultiContent import MultiContentEntryPixmapAlphaTest, MultiContentEntryText
 from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_HALIGN_LEFT, RT_VALIGN_CENTER, RT_HALIGN_CENTER
 from Tools.LoadPixmap import LoadPixmap
-from threading import Thread
-from urllib.request import urlopen, urlretrieve
 import os, re, shutil, time
+from urllib.request import urlopen, urlretrieve
 
 CUR_PATH = os.path.dirname(__file__)
 
@@ -43,7 +42,7 @@ class BISSPro(Screen):
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        items = [("Add/Edit BISS Key", "add", "add.png"), ("Update SoftCam.Key", "upd", "update.png"), ("Auto Add BISS", "auto", "autoadd.png")]
+        items = [("Add BISS Manually", "add", "add.png"), ("Update SoftCam.Key", "upd", "update.png"), ("Browse Online Feeds", "auto", "autoadd.png")]
         lst = []
         for text, action, icon_name in items:
             p = os.path.join(CUR_PATH, icon_name)
@@ -55,58 +54,78 @@ class BISSPro(Screen):
             ]))
         self["menu"].l.setList(lst)
 
-    def get_existing_key(self, sid):
-        """ دالة للبحث عن الشفرة الحالية في ملف SoftCam.Key """
-        path = get_softcam_path()
-        if os.path.exists(path):
-            with open(path, 'r') as f:
-                for line in f:
-                    if line.upper().startswith("F") and sid.upper() in line.upper():
-                        # محاولة استخراج الشفرة (16 رقم هيكس)
-                        match = re.search(r'([0-9A-Fa-f]{16})', line)
-                        if match: return match.group(1).upper()
-        return "0000000000000000"
-
     def ok(self):
         curr = self["menu"].getCurrent()
         if not curr: return
         action = curr[0]
         service = self.session.nav.getCurrentService()
-        if action == "add" and service:
-            info = service.info()
-            sid = "%04X" % (info.getInfo(iServiceInformation.sSID) & 0xFFFF)
-            existing_key = self.get_existing_key(sid) # جلب الشفرة القديمة
-            self.session.openWithCallback(self.manual_done, HexInputScreen, info.getName(), existing_key)
-        # ... (بقية الأكشنات تبقى كما هي)
+        if action == "add":
+            self.session.openWithCallback(self.manual_done, HexInputScreen, service.info().getName() if service else "Manual")
+        elif action == "auto":
+            self.session.open(BissListScreen)
+        elif action == "upd":
+            self.do_update()
 
-    def manual_done(self, key=None):
+    def manual_done(self, key):
         if not key: return
         service = self.session.nav.getCurrentService()
         if service:
             info = service.info()
             sid = "%04X" % (info.getInfo(iServiceInformation.sSID) & 0xFFFF)
             vpid = "%04X" % (info.getInfo(iServiceInformation.sVideoPID) & 0xFFFF if info.getInfo(iServiceInformation.sVideoPID) != -1 else 0)
-            if self.save_biss_key(sid+vpid, key, info.getName()):
-                self["status"].setText("Key Saved & Cam Restarted!")
-            else:
-                self["status"].setText("Error Saving Key")
+            save_key_to_file(sid + vpid, key, info.getName())
+            self["status"].setText("Key Saved Successfully!")
 
-    def save_biss_key(self, full_id, key, name):
-        target = get_softcam_path()
+    def do_update(self):
         try:
-            sid_only = full_id[:4].upper()
-            # حذف السطر القديم الذي يحتوي على نفس الـ SID
-            os.system(f"sed -i '/F {sid_only}/d' {target}")
-            with open(target, "a") as f:
-                f.write(f"F {full_id.upper()} 00000000 {key.upper()} ;{name}\n")
-            # ريستارت الايمو (اختياري حسب رغبتك)
-            os.system("killall -9 oscam ncam 2>/dev/null; sleep 1; /etc/init.d/softcam restart &")
-            return True
-        except: return False
+            urlretrieve("https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key", "/tmp/SoftCam.Key")
+            shutil.copy("/tmp/SoftCam.Key", get_softcam_path())
+            os.system("killall -9 oscam ncam 2>/dev/null; /etc/init.d/softcam restart &")
+            self.session.open(MessageBox, "SoftCam Updated!", MessageBox.TYPE_INFO, timeout=3)
+        except: self.session.open(MessageBox, "Update Failed!", MessageBox.TYPE_ERROR)
 
-# --- واجهة إدخال المفاتيح (تم تعديلها لتستقبل الشفرة الحالية) ---
+def save_key_to_file(full_id, key, name):
+    target = get_softcam_path()
+    try:
+        os.system(f"sed -i '/F {full_id[:4].upper()}/d' {target}")
+        with open(target, "a") as f:
+            f.write(f"F {full_id.upper()} 00000000 {key.upper()} ;{name}\n")
+        os.system("killall -9 oscam ncam 2>/dev/null; sleep 1; /etc/init.d/softcam restart &")
+        return True
+    except: return False
+
+class BissListScreen(Screen):
+    def __init__(self, session):
+        self.ui = AutoScale()
+        Screen.__init__(self, session)
+        self.skin = f"""
+        <screen position="center,center" size="1000,700" title="Select Feed from biss.txt" backgroundColor="#1a1a1a">
+            <widget name="feed_list" position="20,20" size="960,600" itemHeight="50" scrollbarMode="showOnDemand" transparent="1" />
+            <eLabel position="0,630" size="1000,70" backgroundColor="#252525" zPosition="-1" />
+            <eLabel text="Press OK to Install Key" position="10,645" size="980,40" font="Regular;26" halign="center" transparent="1" foregroundColor="#ffffff" />
+        </screen>"""
+        self["feed_list"] = MenuList([])
+        self["actions"] = ActionMap(["OkCancelActions"], {"ok": self.install, "cancel": self.close}, -1)
+        self.onLayoutFinish.append(self.load)
+
+    def load(self):
+        try:
+            data = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
+            lst = [(line, line) for line in data.splitlines() if len(line) > 10]
+            self["feed_list"].setList(lst)
+        except: self.close()
+
+    def install(self):
+        sel = self["feed_list"].getCurrent()
+        if sel:
+            m_sid = re.search(r'([0-9A-Fa-f]{4})', sel[0])
+            m_key = re.search(r'([0-9A-Fa-f]{16})', sel[0])
+            if m_sid and m_key:
+                if save_key_to_file(m_sid.group(1)+"0000", m_key.group(1), "Imported_Feed"):
+                    self.session.open(MessageBox, "Key Installed!", MessageBox.TYPE_INFO, timeout=2)
+
 class HexInputScreen(Screen):
-    def __init__(self, session, ch_name="", existing_key="0000000000000000"):
+    def __init__(self, session, ch_name=""):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
@@ -127,12 +146,8 @@ class HexInputScreen(Screen):
         self["channel"], self["keylabel"], self["char_list"] = Label(ch_name), Label(""), Label("")
         self["key_red"], self["key_green"] = Label("EXIT"), Label("SAVE")
         self["key_yellow"], self["key_blue"] = Label("CLEAR"), Label("RESET")
-        
-        # تحويل الشفرة الموجودة إلى قائمة لتسهيل التعديل
-        self.key_list = list(existing_key)
-        self.index, self.char_idx = 0, 0
+        self.key_list, self.index, self.char_idx = ["0"]*16, 0, 0
         self.chars = "0123456789ABCDEF"
-        
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions", "NumberActions"], {
             "ok": self.confirm, "cancel": self.close, "red": self.close, "green": self.save,
             "yellow": self.clr_one, "blue": self.clr_all, "left": self.L, "right": self.R, "up": self.U, "down": self.D,
@@ -157,4 +172,4 @@ class HexInputScreen(Screen):
     def save(self): self.close("".join(self.key_list))
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="v3.3 Edit Existing Key", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="v3.3 Final Mod", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
