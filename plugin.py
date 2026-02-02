@@ -151,12 +151,14 @@ class BissManagerList(Screen):
             <widget name="keylist" position="{self.ui.px(20)},{self.ui.px(20)}" size="{self.ui.px(960)},{self.ui.px(520)}" itemHeight="{self.ui.px(50)}" scrollbarMode="showOnDemand" />
             <eLabel position="0,{self.ui.px(560)}" size="{self.ui.px(1000)},{self.ui.px(140)}" backgroundColor="#252525" zPosition="-1" />
             <eLabel position="{self.ui.px(30)},{self.ui.px(590)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#00ff00" />
-            <eLabel text="OK: Edit Key" position="{self.ui.px(75)},{self.ui.px(585)}" size="{self.ui.px(300)},{self.ui.px(40)}" font="Regular;26" transparent="1" />
+            <eLabel text="GREEN: Edit Key" position="{self.ui.px(75)},{self.ui.px(585)}" size="{self.ui.px(300)},{self.ui.px(40)}" font="Regular;26" transparent="1" />
             <eLabel position="{self.ui.px(30)},{self.ui.px(635)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ff0000" />
             <eLabel text="RED: Delete" position="{self.ui.px(75)},{self.ui.px(630)}" size="{self.ui.px(300)},{self.ui.px(40)}" font="Regular;26" transparent="1" />
         </screen>"""
         self["keylist"] = MenuList([])
-        self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {"ok": self.edit_key, "cancel": self.close, "red": self.delete_confirm}, -1)
+        self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {
+            "green": self.edit_key, "cancel": self.close, "red": self.delete_confirm
+        }, -1)
         self.onLayoutFinish.append(self.load_keys)
 
     def load_keys(self):
@@ -173,11 +175,12 @@ class BissManagerList(Screen):
             parts = current.split()
             if len(parts) >= 4:
                 ch_name = current.split(";")[-1] if ";" in current else "Unknown"
+                old_key = parts[3] # الشفرة الموجودة حالياً
                 self.old_line = current
-                self.session.openWithCallback(self.finish_edit, HexInputScreen, ch_name)
+                self.session.openWithCallback(self.finish_edit, HexInputScreen, ch_name, old_key)
 
     def finish_edit(self, new_key=None):
-        if new_key is None: return # حماية من الكراش عند الضغط على Exit
+        if new_key is None: return
         path = get_softcam_path()
         parts = self.old_line.split()
         parts[3] = str(new_key).upper()
@@ -207,7 +210,7 @@ class BissManagerList(Screen):
             except: pass
 
 class HexInputScreen(Screen):
-    def __init__(self, session, channel_name=""):
+    def __init__(self, session, channel_name="", existing_key=""):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
@@ -231,7 +234,16 @@ class HexInputScreen(Screen):
         self["keylabel"] = Label(""); self["char_list"] = Label("")
         self["key_red"] = Label("EXIT"); self["key_green"] = Label("SAVE")
         self["key_yellow"] = Label("CLEAR"); self["key_blue"] = Label("RESET")
-        self.key_list = ["0"] * 16; self.index = 0; self.chars = ["A","B","C","D","E","F"]; self.char_index = 0
+        
+        # لو فيه شفرة مبعوتة بنستخدمها، لو مفيش بنحط أصفار
+        if existing_key and len(existing_key) == 16:
+            self.key_list = list(existing_key.upper())
+        else:
+            self.key_list = ["0"] * 16
+            
+        self.index = 0
+        self.chars = ["A","B","C","D","E","F"]
+        self.char_index = 0
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions", "DirectionActions"], {
             "ok": self.confirm_digit, "cancel": self.exit_clean, "red": self.exit_clean, "green": self.save,
             "yellow": self.clear_current_digit, "blue": self.clear_all, "left": self.move_left, "right": self.move_right,
@@ -254,7 +266,7 @@ class HexInputScreen(Screen):
     def move_right(self): self.index = min(15, self.index + 1); self.update_display()
     def clear_current_digit(self): self.key_list[self.index] = "0"; self.update_display()
     def clear_all(self): self.key_list = ["0"] * 16; self.index = 0; self.update_display()
-    def exit_clean(self): self.close(None) # إرسال None بوضوح عند الخروج
+    def exit_clean(self): self.close(None)
     def save(self): self.close("".join(self.key_list))
 
 def main(session, **kwargs): session.open(BISSPro)
