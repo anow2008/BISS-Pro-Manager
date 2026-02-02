@@ -13,8 +13,9 @@ from threading import Thread
 from urllib.request import urlopen, urlretrieve
 import os, re, shutil, time
 
-# تحديد المسار الرئيسي للبلجن
-PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro"
+# الحصول على مسار البلجن الحالي تلقائياً
+CUR_PATH = os.path.dirname(__file__)
+ICON_PATH = os.path.join(CUR_PATH, "icons")
 
 def get_softcam_path():
     paths = [
@@ -55,7 +56,6 @@ class BISSPro(Screen):
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        # مصفوفة تحتوي على (النص، الأكشن، اسم ملف الأيقونة)
         items = [
             ("Add BISS Manually", "add", "add.png"), 
             ("Update SoftCam.Key", "upd", "update.png"), 
@@ -63,10 +63,12 @@ class BISSPro(Screen):
         ]
         lst = []
         for text, action, icon_name in items:
-            # البحث عن الأيقونة في المجلد الرئيسي مباشرة
-            p = os.path.join(PLUGIN_PATH, icon_name)
-            pix = LoadPixmap(path=p) if os.path.exists(p) else None
+            p = os.path.join(ICON_PATH, icon_name)
+            # إذا لم يجدها في مجلد icons، يبحث عنها في المجلد الرئيسي
+            if not os.path.exists(p):
+                p = os.path.join(CUR_PATH, icon_name)
             
+            pix = LoadPixmap(path=p) if os.path.exists(p) else None
             lst.append((action, [
                 MultiContentEntryPixmapAlphaTest(pos=(self.ui.px(25), self.ui.px(15)), size=(self.ui.px(80), self.ui.px(80)), png=pix),
                 MultiContentEntryText(pos=(self.ui.px(130), self.ui.px(25)), size=(self.ui.px(800), self.ui.px(60)), font=0, text=text, flags=RT_VALIGN_CENTER)
@@ -74,7 +76,6 @@ class BISSPro(Screen):
         self["menu"].l.setList(lst)
         if hasattr(self["menu"].l, 'setFont'): self["menu"].l.setFont(0, gFont("Regular", self.ui.font(32)))
 
-    # ... بقية الدوال (restart_softcam, save_biss_key, ok, manual_done, do_update, do_auto, show_result) تبقى كما هي في الكود السابق ...
     def restart_softcam(self):
         os.system("killall -9 oscam ncam vicardd gbox 2>/dev/null")
         time.sleep(1.5)
@@ -169,7 +170,6 @@ class BISSPro(Screen):
         self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR, timeout=5)
         self["status"].setText("Ready"); self["progress"].setValue(0)
 
-# واجهة إدخال الشفرة (HexInputScreen) تظل كما هي في النسخة الملونة الأخيرة
 class HexInputScreen(Screen):
     def __init__(self, session, channel_name=""):
         self.ui = AutoScale()
@@ -208,6 +208,7 @@ class HexInputScreen(Screen):
             "2": lambda: self.keyNum("2"), "3": lambda: self.keyNum("3"), "4": lambda: self.keyNum("4"), "5": lambda: self.keyNum("5"), 
             "6": lambda: self.keyNum("6"), "7": lambda: self.keyNum("7"), "8": lambda: self.keyNum("8"), "9": lambda: self.keyNum("9")}, -1)
         self.update_display()
+
     def update_display(self):
         d_text = ""
         for i in range(16):
@@ -219,6 +220,7 @@ class HexInputScreen(Screen):
         current_char = self.chars[self.char_index]
         c_text = c_text.replace(current_char, " >%s< " % current_char)
         self["char_list"].setText(c_text)
+
     def move_char_up(self): self.char_index = (self.char_index - 1) % len(self.chars); self.update_display()
     def move_char_down(self): self.char_index = (self.char_index + 1) % len(self.chars); self.update_display()
     def confirm_digit(self): self.key_list[self.index] = self.chars[self.char_index]; self.index = min(15, self.index + 1); self.update_display()
@@ -230,5 +232,7 @@ class HexInputScreen(Screen):
     def save(self): self.close("".join(self.key_list))
 
 def main(session, **kwargs): session.open(BISSPro)
-def Plugins(**kwargs): return [PluginDescriptor(name="BissPro", description="Manager v3.3 Final English", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
-
+def Plugins(**kwargs): 
+    # محاولة جلب أيقونة البلجن الخارجية من المجلد الرئيسي
+    p_icon = os.path.join(CUR_PATH, "plugin.png")
+    return [PluginDescriptor(name="BissPro", description="Manager v3.3 Final English", icon="plugin.png" if os.path.exists(p_icon) else None, where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
