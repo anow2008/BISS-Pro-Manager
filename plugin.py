@@ -57,27 +57,40 @@ class BISSPro(Screen):
             
             <widget name="status" position="{self.ui.px(50)},{self.ui.px(640)}" size="{self.ui.px(1000)},{self.ui.px(60)}" font="Regular;{self.ui.font(28)}" halign="center" valign="center" transparent="1" foregroundColor="#f0a30a"/>
         </screen>"""
-        self["status"] = Label("Ready"); self["btn_red"] = Label("Add Key"); self["btn_green"] = Label("Key Editor")
-        self["btn_yellow"] = Label("Update"); self["btn_blue"] = Label("Smart Auto")
+        self["status"] = Label("Ready")
+        self["btn_red"] = Label("Add")
+        self["btn_green"] = Label("Key Editor")
+        self["btn_yellow"] = Label("Update")
+        self["btn_blue"] = Label("Auto Search")
+        
         self["menu"] = MenuList([])
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], {
             "ok": self.ok, "cancel": self.close, "red": self.action_add, "green": self.action_editor, 
             "yellow": self.action_update, "blue": self.action_auto}, -1)
+        
         self.timer = eTimer()
         try: self.timer_callback = self.show_result; self.timer.callback.append(self.timer_callback)
         except: self.timer.timeout.connect(self.show_result)
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        items = [("Add Key", "Add BISS Manually", "add"), ("Key Editor", "Edit or Delete Keys", "editor"), 
-                 ("Update SoftCam", "Download SoftCam.Key from server", "upd"), ("Smart Auto Search", "Auto Search for active channel", "auto")]
+        # تم تعديل الأسماء هنا لتكون كما طلبت بالظبط
+        items = [
+            ("Add", "Add BISS Manually", "add"), 
+            ("Key Editor", "Edit or Delete Keys", "editor"), 
+            ("Update Softcam", "Update SoftCam.Key File", "upd"), 
+            ("Smart Auto Search", "Smart Auto Search (Internet)", "auto")
+        ]
         lst = []
         for title, subtitle, action in items:
-            lst.append((action, [MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(10)), size=(self.ui.px(950), self.ui.px(50)), font=0, text=title, flags=RT_VALIGN_TOP),
-                                 MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(60)), size=(self.ui.px(950), self.ui.px(40)), font=1, text=subtitle, flags=RT_VALIGN_TOP, color=0xbbbbbb)]))
+            lst.append((action, [
+                MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(10)), size=(self.ui.px(950), self.ui.px(50)), font=0, text=title, flags=RT_VALIGN_TOP),
+                MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(60)), size=(self.ui.px(950), self.ui.px(40)), font=1, text=subtitle, flags=RT_VALIGN_TOP, color=0xbbbbbb)
+            ]))
         self["menu"].l.setList(lst)
         if hasattr(self["menu"].l, 'setFont'): 
-            self["menu"].l.setFont(0, gFont("Regular", self.ui.font(36))); self["menu"].l.setFont(1, gFont("Regular", self.ui.font(24)))
+            self["menu"].l.setFont(0, gFont("Regular", self.ui.font(36)))
+            self["menu"].l.setFont(1, gFont("Regular", self.ui.font(24)))
 
     def ok(self):
         curr = self["menu"].getCurrent(); act = curr[0] if curr else ""
