@@ -13,8 +13,9 @@ import os, re, shutil, time
 from urllib.request import urlopen, urlretrieve
 from threading import Thread
 
-# تحديد مسار البلجن والأيقونات
+# تحديد مسار البلجن والأيقونات ورقم النسخة
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro/"
+VERSION_NUM = "v1.0"
 
 def get_softcam_path():
     paths = ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/ncam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key", "/usr/keys/SoftCam.Key"]
@@ -46,8 +47,13 @@ class BISSPro(Screen):
         <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(780)}" title="BissPro Smart">
             <widget name="time_label" position="{self.ui.px(750)},{self.ui.px(20)}" size="{self.ui.px(300)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" halign="right" foregroundColor="#ffffff" transparent="1" />
             <widget name="date_label" position="{self.ui.px(50)},{self.ui.px(20)}" size="{self.ui.px(400)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" halign="left" foregroundColor="#bbbbbb" transparent="1" />
+            
             <widget name="menu" position="{self.ui.px(50)},{self.ui.px(80)}" size="{self.ui.px(1000)},{self.ui.px(410)}" itemHeight="{self.ui.px(100)}" scrollbarMode="showOnDemand" transparent="1"/>
+            
             <widget name="main_progress" position="{self.ui.px(50)},{self.ui.px(510)}" size="{self.ui.px(1000)},{self.ui.px(12)}" foregroundColor="#00ff00" backgroundColor="#222222" />
+            
+            <widget name="version_label" position="{self.ui.px(850)},{self.ui.px(530)}" size="{self.ui.px(200)},{self.ui.px(30)}" font="Regular;{self.ui.font(22)}" halign="right" foregroundColor="#888888" transparent="1" />
+            
             <eLabel position="{self.ui.px(50)},{self.ui.px(540)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             <eLabel position="{self.ui.px(70)},{self.ui.px(570)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ff0000" />
             <widget name="btn_red" position="{self.ui.px(110)},{self.ui.px(565)}" size="{self.ui.px(200)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
@@ -63,17 +69,21 @@ class BISSPro(Screen):
         self["btn_green"] = Label("Key Editor")
         self["btn_yellow"] = Label("Update Softcam")
         self["btn_blue"] = Label("Smart Auto Search")
+        self["version_label"] = Label(f"Version: {VERSION_NUM}")
         self["status"] = Label("Ready")
         self["time_label"] = Label("")
         self["date_label"] = Label("")
         self["main_progress"] = ProgressBar()
+        
         self.clock_timer = eTimer()
         try: self.clock_timer.callback.append(self.update_clock)
         except: self.clock_timer.timeout.connect(self.update_clock)
         self.clock_timer.start(1000)
+        
         self.timer = eTimer()
         try: self.timer.callback.append(self.show_result)
         except: self.timer.timeout.connect(self.show_result)
+        
         self["menu"] = MenuList([])
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {"ok": self.ok, "cancel": self.close, "red": self.action_add, "green": self.action_editor, "yellow": self.action_update, "blue": self.action_auto}, -1)
         self.onLayoutFinish.append(self.build_menu)
