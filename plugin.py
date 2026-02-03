@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Coded by Gemini AI - BissPro Smart
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
 from Screens.MessageBox import MessageBox
@@ -14,10 +15,14 @@ from urllib.request import urlopen, urlretrieve
 from threading import Thread
 
 # ==========================================================
-# التعريفات الأساسية
+# التعريفات والروابط الخاصة بك
 # ==========================================================
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro/"
 VERSION_NUM = "v1.0"
+
+# روابط التحديث الخاصة بمستودعك
+URL_VERSION = "https://raw.githubusercontent.com/anow2008/BissPro/refs/heads/main/version.txt"
+URL_PLUGIN = "https://raw.githubusercontent.com/anow2008/BissPro/refs/heads/main/plugin.py"
 
 def get_softcam_path():
     paths = ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/ncam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key", "/usr/keys/SoftCam.Key"]
@@ -74,16 +79,44 @@ class BISSPro(Screen):
         self["status"] = Label("Ready")
         self["time_label"] = Label(""); self["date_label"] = Label("")
         self["main_progress"] = ProgressBar()
+        
         self.clock_timer = eTimer()
         try: self.clock_timer.callback.append(self.update_clock)
         except: self.clock_timer.timeout.connect(self.update_clock)
         self.clock_timer.start(1000)
+        
         self.timer = eTimer()
         try: self.timer.callback.append(self.show_result)
         except: self.timer.timeout.connect(self.show_result)
+        
         self["menu"] = MenuList([])
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {"ok": self.ok, "cancel": self.close, "red": self.action_add, "green": self.action_editor, "yellow": self.action_update, "blue": self.action_auto}, -1)
-        self.onLayoutFinish.append(self.build_menu); self.update_clock()
+        self.onLayoutFinish.append(self.build_menu)
+        self.onLayoutFinish.append(self.check_for_updates)
+        self.update_clock()
+
+    def check_for_updates(self):
+        Thread(target=self.thread_check_version).start()
+
+    def thread_check_version(self):
+        try:
+            remote_v = urlopen(URL_VERSION, timeout=7).read().decode("utf-8").strip()
+            current_v = VERSION_NUM.replace("v", "")
+            if float(remote_v) > float(current_v):
+                self.session.openWithCallback(self.install_update, MessageBox, f"New Update v{remote_v} Available!\nInstall now?", MessageBox.TYPE_YESNO)
+        except: pass
+
+    def install_update(self, answer):
+        if answer:
+            self["status"].setText("Updating Plugin...")
+            Thread(target=self.do_plugin_download).start()
+
+    def do_plugin_download(self):
+        try:
+            urlretrieve(URL_PLUGIN, PLUGIN_PATH + "plugin.py")
+            self.res = (True, "Plugin Updated! Please Restart GUI.")
+        except: self.res = (False, "Update Failed!")
+        self.timer.start(100, True)
 
     def update_clock(self):
         self["time_label"].setText(time.strftime("%H:%M:%S"))
@@ -145,13 +178,13 @@ class BISSPro(Screen):
     def do_update(self):
         try:
             urlretrieve("https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key", "/tmp/SoftCam.Key")
-            shutil.copy("/tmp/SoftCam.Key", get_softcam_path()); restart_softcam_global(); self.res = (True, "Update Successful")
-        except: self.res = (False, "Update Error")
+            shutil.copy("/tmp/SoftCam.Key", get_softcam_path()); restart_softcam_global(); self.res = (True, "Softcam Updated")
+        except: self.res = (False, "Softcam Update Failed")
         self.timer.start(100, True)
 
     def action_auto(self):
         service = self.session.nav.getCurrentService()
-        if service: self["status"].setText("Searching by Frequency..."); self["main_progress"].setValue(40); Thread(target=self.do_auto, args=(service,)).start()
+        if service: self["status"].setText("Searching Online..."); self["main_progress"].setValue(40); Thread(target=self.do_auto, args=(service,)).start()
 
     def do_auto(self, service):
         try:
@@ -169,9 +202,6 @@ class BISSPro(Screen):
         except Exception: self.res = (False, "Network Error")
         self.timer.start(100, True)
 
-# ==========================================================
-# شاشة إدارة المفاتيح
-# ==========================================================
 class BissManagerList(Screen):
     def __init__(self, session):
         self.ui = AutoScale()
@@ -224,9 +254,6 @@ class BissManagerList(Screen):
                 self.load_keys(); restart_softcam_global()
             except: pass
 
-# ==========================================================
-# شاشة إدخال الكود (المحدثة)
-# ==========================================================
 class HexInputScreen(Screen):
     def __init__(self, session, channel_name="", existing_key=""):
         self.ui = AutoScale()
@@ -237,20 +264,14 @@ class HexInputScreen(Screen):
             <widget name="progress" position="{self.ui.px(200)},{self.ui.px(100)}" size="{self.ui.px(600)},{self.ui.px(15)}" foregroundColor="#00ff00" />
             <widget name="keylabel" position="{self.ui.px(10)},{self.ui.px(140)}" size="{self.ui.px(980)},{self.ui.px(120)}" font="Regular;{self.ui.font(75)}" halign="center" foregroundColor="#f0a30a" transparent="1" />
             <widget name="char_list" position="{self.ui.px(10)},{self.ui.px(280)}" size="{self.ui.px(980)},{self.ui.px(80)}" font="Regular;{self.ui.font(45)}" halign="center" foregroundColor="#ffffff" transparent="1" />
-            
             <eLabel text="UP/DOWN: Change A-F | LEFT/RIGHT: Move" position="{self.ui.px(10)},{self.ui.px(380)}" size="{self.ui.px(980)},{self.ui.px(35)}" font="Regular;{self.ui.font(24)}" halign="center" foregroundColor="#888888" transparent="1" />
-            
             <eLabel position="0,{self.ui.px(450)}" size="{self.ui.px(1000)},{self.ui.px(200)}" backgroundColor="#252525" zPosition="-1" />
-            
             <eLabel position="{self.ui.px(50)},{self.ui.px(485)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#ff0000" />
             <widget name="l_red" position="{self.ui.px(85)},{self.ui.px(480)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
-            
             <eLabel position="{self.ui.px(280)},{self.ui.px(485)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#00ff00" />
             <widget name="l_green" position="{self.ui.px(315)},{self.ui.px(480)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
-            
             <eLabel position="{self.ui.px(510)},{self.ui.px(485)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#ffff00" />
             <widget name="l_yellow" position="{self.ui.px(545)},{self.ui.px(480)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
-            
             <eLabel position="{self.ui.px(740)},{self.ui.px(485)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#0000ff" />
             <widget name="l_blue" position="{self.ui.px(775)},{self.ui.px(480)}" size="{self.ui.px(180)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
         </screen>"""
@@ -263,7 +284,6 @@ class HexInputScreen(Screen):
         }, -1)
         self.key_list = list(existing_key.upper()) if (existing_key and len(existing_key) == 16) else ["0"] * 16
         self.index = 0; self.chars = ["A","B","C","D","E","F"]; self.char_index = 0; self.update_display()
-
     def update_display(self):
         display_parts = []
         for i in range(16):
@@ -274,7 +294,6 @@ class HexInputScreen(Screen):
         self["keylabel"].setText("".join(display_parts))
         self["progress"].setValue(int(((self.index + 1) / 16.0) * 100))
         curr = self.chars[self.char_index]; self["char_list"].setText("  ".join(self.chars).replace(curr, "> %s <" % curr))
-
     def clear_current(self): self.key_list[self.index] = "0"; self.update_display()
     def reset_all(self): self.key_list = ["0"] * 16; self.index = 0; self.update_display()
     def move_char_up(self): self.char_index = (self.char_index - 1) % len(self.chars); self.key_list[self.index] = self.chars[self.char_index]; self.update_display()
@@ -287,4 +306,3 @@ class HexInputScreen(Screen):
 
 def main(session, **kwargs): session.open(BISSPro)
 def Plugins(**kwargs): return [PluginDescriptor(name="BissPro Smart", description="Smart BISS Manager", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
-
