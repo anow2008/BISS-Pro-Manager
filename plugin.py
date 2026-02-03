@@ -75,30 +75,35 @@ class BISSPro(Screen):
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        # القائمة بالأسماء المطلوبة بالظبط
-        items = [
+        # تم تعديل بناء القائمة لضمان ظهور النص بالإنجليزية بدلاً من الـ Action ID
+        lst = []
+        # (العنوان, الوصف, الرمز البرمجي)
+        menu_items = [
             ("Add", "Add BISS Key Manually", "add"), 
             ("Key Editor", "Edit or Delete Stored Keys", "editor"), 
             ("Update Softcam", "Download latest SoftCam.Key", "upd"), 
             ("Smart Auto Search", "Auto find key for current channel", "auto")
         ]
-        lst = []
-        for title, desc, action in items:
-            lst.append((action, [
-                MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(10)), size=(self.ui.px(950), self.ui.px(50)), font=0, text=title, flags=RT_VALIGN_TOP),
-                MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(60)), size=(self.ui.px(950), self.ui.px(40)), font=1, text=desc, flags=RT_VALIGN_TOP, color=0xbbbbbb)
-            ]))
+        
+        for title, desc, action in menu_items:
+            res = [action] # هذا هو الـ ID الذي يرجع عند الضغط
+            res.append(MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(10)), size=(self.ui.px(950), self.ui.px(50)), font=0, text=title, flags=RT_VALIGN_TOP))
+            res.append(MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(60)), size=(self.ui.px(950), self.ui.px(40)), font=1, text=desc, flags=RT_VALIGN_TOP, color=0xbbbbbb))
+            lst.append(res)
+            
         self["menu"].l.setList(lst)
         if hasattr(self["menu"].l, 'setFont'): 
             self["menu"].l.setFont(0, gFont("Regular", self.ui.font(38)))
             self["menu"].l.setFont(1, gFont("Regular", self.ui.font(24)))
 
     def ok(self):
-        curr = self["menu"].getCurrent(); act = curr[0] if curr else ""
-        if act == "add": self.action_add()
-        elif act == "editor": self.action_editor()
-        elif act == "upd": self.action_update()
-        elif act == "auto": self.action_auto()
+        curr = self["menu"].getCurrent()
+        if curr:
+            act = curr[0]
+            if act == "add": self.action_add()
+            elif act == "editor": self.action_editor()
+            elif act == "upd": self.action_update()
+            elif act == "auto": self.action_auto()
 
     def action_add(self):
         service = self.session.nav.getCurrentService()
@@ -111,7 +116,8 @@ class BISSPro(Screen):
         if not key: return
         service = self.session.nav.getCurrentService()
         if not service: return
-        info = service.info(); combined_id = ("%04X" % (info.getInfo(iServiceInformation.sSID) & 0xFFFF)) + ("%04X" % (info.getInfo(iServiceInformation.sVideoPID) & 0xFFFF) if info.getInfo(iServiceInformation.sVideoPID) != -1 else "0000")
+        info = service.info()
+        combined_id = ("%04X" % (info.getInfo(iServiceInformation.sSID) & 0xFFFF)) + ("%04X" % (info.getInfo(iServiceInformation.sVideoPID) & 0xFFFF) if info.getInfo(iServiceInformation.sVideoPID) != -1 else "0000")
         if self.save_biss_key(combined_id, key, info.getName()): self.res = (True, f"Saved: {info.getName()}")
         else: self.res = (False, "File Error")
         self.timer.start(100, True)
