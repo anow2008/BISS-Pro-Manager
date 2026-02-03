@@ -58,7 +58,6 @@ class BISSPro(Screen):
             <widget name="status" position="{self.ui.px(50)},{self.ui.px(640)}" size="{self.ui.px(1000)},{self.ui.px(60)}" font="Regular;{self.ui.font(28)}" halign="center" valign="center" transparent="1" foregroundColor="#f0a30a"/>
         </screen>"""
         
-        # الأسماء في شريط الألوان تحت
         self["btn_red"] = Label("Add")
         self["btn_green"] = Label("Key Editor")
         self["btn_yellow"] = Label("Update Softcam")
@@ -76,23 +75,23 @@ class BISSPro(Screen):
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        # الأسماء المطلوبة داخل القائمة (الرئيسي وتحته الوصف)
+        # القائمة بالأسماء المطلوبة بالظبط
         items = [
-            ("Add", "Add BISS Manually", "add"), 
-            ("Key Editor", "Manage and Delete Keys", "editor"), 
-            ("Update Softcam", "Update SoftCam.Key from server", "upd"), 
-            ("Smart Auto Search", "Smart Auto Search (Internet)", "auto")
+            ("Add", "Add BISS Key Manually", "add"), 
+            ("Key Editor", "Edit or Delete Stored Keys", "editor"), 
+            ("Update Softcam", "Download latest SoftCam.Key", "upd"), 
+            ("Smart Auto Search", "Auto find key for current channel", "auto")
         ]
         lst = []
-        for title, subtitle, action in items:
+        for title, desc, action in items:
             lst.append((action, [
                 MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(10)), size=(self.ui.px(950), self.ui.px(50)), font=0, text=title, flags=RT_VALIGN_TOP),
-                MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(60)), size=(self.ui.px(950), self.ui.px(40)), font=1, text=subtitle, flags=RT_VALIGN_TOP, color=0xbbbbbb)
+                MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(60)), size=(self.ui.px(950), self.ui.px(40)), font=1, text=desc, flags=RT_VALIGN_TOP, color=0xbbbbbb)
             ]))
         self["menu"].l.setList(lst)
         if hasattr(self["menu"].l, 'setFont'): 
-            self["menu"].l.setFont(0, gFont("Regular", self.ui.font(38))) # الاسم الرئيسي
-            self["menu"].l.setFont(1, gFont("Regular", self.ui.font(24))) # الوصف
+            self["menu"].l.setFont(0, gFont("Regular", self.ui.font(38)))
+            self["menu"].l.setFont(1, gFont("Regular", self.ui.font(24)))
 
     def ok(self):
         curr = self["menu"].getCurrent(); act = curr[0] if curr else ""
@@ -112,8 +111,7 @@ class BISSPro(Screen):
         if not key: return
         service = self.session.nav.getCurrentService()
         if not service: return
-        info = service.info(); raw_sid = info.getInfo(iServiceInformation.sSID); raw_vpid = info.getInfo(iServiceInformation.sVideoPID)
-        combined_id = ("%04X" % (raw_sid & 0xFFFF)) + ("%04X" % (raw_vpid & 0xFFFF) if raw_vpid != -1 else "0000")
+        info = service.info(); combined_id = ("%04X" % (info.getInfo(iServiceInformation.sSID) & 0xFFFF)) + ("%04X" % (info.getInfo(iServiceInformation.sVideoPID) & 0xFFFF) if info.getInfo(iServiceInformation.sVideoPID) != -1 else "0000")
         if self.save_biss_key(combined_id, key, info.getName()): self.res = (True, f"Saved: {info.getName()}")
         else: self.res = (False, "File Error")
         self.timer.start(100, True)
@@ -232,8 +230,8 @@ class HexInputScreen(Screen):
             <widget name="progress" position="200,100" size="600,15" foregroundColor="#00ff00" zPosition="2" />
             <widget name="keylabel" position="10,140" size="980,120" font="Regular;75" halign="center" foregroundColor="#f0a30a" transparent="1" />
             
-            <eLabel text="UP / DOWN: Change Character (A-F)" position="10,270" size="980,35" font="Regular;24" halign="center" foregroundColor="#ffffff" transparent="1" />
-            <eLabel text="LEFT / RIGHT: Navigate Digits (0-9)" position="10,310" size="980,35" font="Regular;24" halign="center" foregroundColor="#ffffff" transparent="1" />
+            <eLabel text="UP / DOWN: Change Letters (A-F)" position="10,270" size="980,35" font="Regular;24" halign="center" foregroundColor="#ffffff" transparent="1" />
+            <eLabel text="LEFT / RIGHT: Move Between Digits (0-9)" position="10,310" size="980,35" font="Regular;24" halign="center" foregroundColor="#ffffff" transparent="1" />
             
             <widget name="char_list" position="10,360" size="980,80" font="Regular;45" halign="center" foregroundColor="#ffffff" transparent="1" />
             <eLabel position="0,520" size="1000,80" backgroundColor="#252525" zPosition="-1" />
@@ -248,8 +246,7 @@ class HexInputScreen(Screen):
         </screen>"""
         self["channel"] = Label(f"{channel_name}"); self["keylabel"] = Label(""); self["char_list"] = Label(""); self["progress"] = ProgressBar()
         self["key_red"] = Label("EXIT"); self["key_green"] = Label("SAVE"); self["key_yellow"] = Label("CLEAR"); self["key_blue"] = Label("RESET")
-        if existing_key and len(existing_key) == 16: self.key_list = list(existing_key.upper())
-        else: self.key_list = ["0"] * 16
+        self.key_list = list(existing_key.upper()) if (existing_key and len(existing_key) == 16) else ["0"] * 16
         self.index = 0; self.chars = ["A","B","C","D","E","F"]; self.char_index = 0
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions", "DirectionActions"], {
             "ok": self.confirm_digit, "cancel": self.exit_clean, "red": self.exit_clean, "green": self.save,
@@ -267,7 +264,7 @@ class HexInputScreen(Screen):
             else: display_parts.append(char)
             if (i + 1) % 4 == 0 and i < 15: display_parts.append("  -  ")
         self["keylabel"].setText("".join(display_parts))
-        progress_val = int(((self.index + 1) / 16.0) * 100); self["progress"].setValue(progress_val)
+        self["progress"].setValue(int(((self.index + 1) / 16.0) * 100))
         current_char = self.chars[self.char_index]; self["char_list"].setText("  ".join(self.chars).replace(current_char, "> %s <" % current_char))
 
     def move_char_up(self): self.char_index = (self.char_index - 1) % len(self.chars); self.update_display()
