@@ -40,27 +40,19 @@ class BISSPro(Screen):
         Screen.__init__(self, session)
         self.skin = f"""
         <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(780)}" title="BissPro Smart Sync v1.0">
-            <widget name="menu" position="{self.ui.px(50)},{self.ui.px(80)}" size="{self.ui.px(1000)},{self.ui.px(410)}" itemHeight="{self.ui.px(100)}" scrollbarMode="showOnDemand" transparent="1"/>
-            
             <widget name="time_label" position="{self.ui.px(750)},{self.ui.px(20)}" size="{self.ui.px(300)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" halign="right" foregroundColor="#ffffff" transparent="1" />
             <widget name="date_label" position="{self.ui.px(50)},{self.ui.px(20)}" size="{self.ui.px(400)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" halign="left" foregroundColor="#bbbbbb" transparent="1" />
-
+            <widget name="menu" position="{self.ui.px(50)},{self.ui.px(80)}" size="{self.ui.px(1000)},{self.ui.px(410)}" itemHeight="{self.ui.px(100)}" scrollbarMode="showOnDemand" transparent="1"/>
             <widget name="main_progress" position="{self.ui.px(50)},{self.ui.px(510)}" size="{self.ui.px(1000)},{self.ui.px(12)}" foregroundColor="#00ff00" backgroundColor="#222222" />
-            
             <eLabel position="{self.ui.px(50)},{self.ui.px(540)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
-            
             <eLabel position="{self.ui.px(70)},{self.ui.px(570)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ff0000" />
             <widget name="btn_red" position="{self.ui.px(110)},{self.ui.px(565)}" size="{self.ui.px(200)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
-            
             <eLabel position="{self.ui.px(320)},{self.ui.px(570)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#00ff00" />
             <widget name="btn_green" position="{self.ui.px(360)},{self.ui.px(565)}" size="{self.ui.px(200)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
-            
             <eLabel position="{self.ui.px(550)},{self.ui.px(570)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ffff00" />
             <widget name="btn_yellow" position="{self.ui.px(590)},{self.ui.px(565)}" size="{self.ui.px(200)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
-            
             <eLabel position="{self.ui.px(780)},{self.ui.px(570)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#0000ff" />
             <widget name="btn_blue" position="{self.ui.px(820)},{self.ui.px(565)}" size="{self.ui.px(220)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
-            
             <widget name="status" position="{self.ui.px(50)},{self.ui.px(650)}" size="{self.ui.px(1000)},{self.ui.px(60)}" font="Regular;{self.ui.font(30)}" halign="center" valign="center" transparent="1" foregroundColor="#f0a30a"/>
         </screen>"""
         self["btn_red"] = Label("Add")
@@ -71,23 +63,15 @@ class BISSPro(Screen):
         self["time_label"] = Label("")
         self["date_label"] = Label("")
         self["main_progress"] = ProgressBar()
-        self["main_progress"].setValue(0)
-        
-        self["menu"] = MenuList([])
-        self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {
-            "ok": self.ok, "cancel": self.close, "red": self.action_add, "green": self.action_editor, 
-            "yellow": self.action_update, "blue": self.action_auto}, -1)
-        
-        # Clock Timer
         self.clock_timer = eTimer()
         try: self.clock_timer.callback.append(self.update_clock)
         except: self.clock_timer.timeout.connect(self.update_clock)
         self.clock_timer.start(1000)
-
         self.timer = eTimer()
         try: self.timer.callback.append(self.show_result)
         except: self.timer.timeout.connect(self.show_result)
-        
+        self["menu"] = MenuList([])
+        self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {"ok": self.ok, "cancel": self.close, "red": self.action_add, "green": self.action_editor, "yellow": self.action_update, "blue": self.action_auto}, -1)
         self.onLayoutFinish.append(self.build_menu)
         self.update_clock()
 
@@ -99,12 +83,10 @@ class BISSPro(Screen):
         menu_items = [("Add", "Add BISS Key Manually", "add"), ("Key Editor", "Edit or Delete Stored Keys", "editor"), ("Update Softcam", "Download latest SoftCam.Key", "upd"), ("Smart Auto Search", "Auto find key for current channel", "auto")]
         lst = []
         for name, desc, act in menu_items:
-            res = (name, [MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(5)), size=(self.ui.px(950), self.ui.px(45)), font=0, text=name, flags=RT_VALIGN_TOP),
-                          MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(50)), size=(self.ui.px(950), self.ui.px(35)), font=1, text=desc, flags=RT_VALIGN_TOP, color=0xbbbbbb), act])
+            res = (name, [MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(5)), size=(self.ui.px(950), self.ui.px(45)), font=0, text=name, flags=RT_VALIGN_TOP), MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(50)), size=(self.ui.px(950), self.ui.px(35)), font=1, text=desc, flags=RT_VALIGN_TOP, color=0xbbbbbb), act])
             lst.append(res)
         self["menu"].l.setList(lst)
-        if hasattr(self["menu"].l, 'setFont'): 
-            self["menu"].l.setFont(0, gFont("Regular", self.ui.font(36))); self["menu"].l.setFont(1, gFont("Regular", self.ui.font(24)))
+        if hasattr(self["menu"].l, 'setFont'): self["menu"].l.setFont(0, gFont("Regular", self.ui.font(36))); self["menu"].l.setFont(1, gFont("Regular", self.ui.font(24)))
 
     def ok(self):
         curr = self["menu"].getCurrent()
@@ -144,15 +126,9 @@ class BISSPro(Screen):
             restart_softcam_global(); return True
         except: return False
 
-    def show_result(self): 
-        self["main_progress"].setValue(0)
-        self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR, timeout=5)
+    def show_result(self): self["main_progress"].setValue(0); self.session.open(MessageBox, self.res[1], MessageBox.TYPE_INFO if self.res[0] else MessageBox.TYPE_ERROR, timeout=5)
 
-    def action_update(self): 
-        self["status"].setText("Updating Softcam..."); 
-        self["main_progress"].setValue(50)
-        Thread(target=self.do_update).start()
-
+    def action_update(self): self["status"].setText("Updating Softcam..."); self["main_progress"].setValue(50); Thread(target=self.do_update).start()
     def do_update(self):
         try:
             urlretrieve("https://raw.githubusercontent.com/anow2008/softcam.key/main/softcam.key", "/tmp/SoftCam.Key")
@@ -162,11 +138,7 @@ class BISSPro(Screen):
 
     def action_auto(self):
         service = self.session.nav.getCurrentService()
-        if service: 
-            self["status"].setText("Smart Searching..."); 
-            self["main_progress"].setValue(40)
-            Thread(target=self.do_auto, args=(service,)).start()
-
+        if service: self["status"].setText("Smart Searching..."); self["main_progress"].setValue(40); Thread(target=self.do_auto, args=(service,)).start()
     def do_auto(self, service):
         try:
             info = service.info(); ch_name = info.getName(); t_data = info.getInfoObject(iServiceInformation.sTransponderData)
@@ -240,30 +212,28 @@ class HexInputScreen(Screen):
         self.ui = AutoScale()
         Screen.__init__(self, session)
         self.skin = f"""
-        <screen position="center,center" size="{self.ui.px(1000)},{self.ui.px(600)}" title="Key Input" backgroundColor="#1a1a1a">
+        <screen position="center,center" size="{self.ui.px(1000)},{self.ui.px(620)}" title="Key Input" backgroundColor="#1a1a1a">
             <widget name="channel" position="{self.ui.px(10)},{self.ui.px(20)}" size="{self.ui.px(980)},{self.ui.px(60)}" font="Regular;{self.ui.font(42)}" halign="center" foregroundColor="#00ff00" transparent="1" />
             <widget name="progress" position="{self.ui.px(200)},{self.ui.px(100)}" size="{self.ui.px(600)},{self.ui.px(15)}" foregroundColor="#00ff00" />
             <widget name="keylabel" position="{self.ui.px(10)},{self.ui.px(140)}" size="{self.ui.px(980)},{self.ui.px(120)}" font="Regular;{self.ui.font(75)}" halign="center" foregroundColor="#f0a30a" transparent="1" />
             <widget name="char_list" position="{self.ui.px(10)},{self.ui.px(300)}" size="{self.ui.px(980)},{self.ui.px(80)}" font="Regular;{self.ui.font(45)}" halign="center" foregroundColor="#ffffff" transparent="1" />
             
-            <eLabel position="0,{self.ui.px(500)}" size="{self.ui.px(1000)},{self.ui.px(100)}" backgroundColor="#252525" zPosition="-1" />
-            <eLabel position="{self.ui.px(40)},{self.ui.px(535)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#ff0000" />
-            <widget name="l_red" position="{self.ui.px(70)},{self.ui.px(530)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
-            <eLabel position="{self.ui.px(280)},{self.ui.px(535)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#00ff00" />
-            <widget name="l_green" position="{self.ui.px(310)},{self.ui.px(530)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
-            <eLabel position="{self.ui.px(520)},{self.ui.px(535)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#ffff00" />
-            <widget name="l_yellow" position="{self.ui.px(550)},{self.ui.px(530)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
-            <eLabel position="{self.ui.px(760)},{self.ui.px(535)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#0000ff" />
-            <widget name="l_blue" position="{self.ui.px(790)},{self.ui.px(530)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <eLabel text="Use LEFT/RIGHT arrows to move between digits" position="{self.ui.px(10)},{self.ui.px(400)}" size="{self.ui.px(980)},{self.ui.px(35)}" font="Regular;{self.ui.font(26)}" halign="center" foregroundColor="#888888" transparent="1" />
+            <eLabel text="Use UP/DOWN arrows to change letters (A-F)" position="{self.ui.px(10)},{self.ui.px(440)}" size="{self.ui.px(980)},{self.ui.px(35)}" font="Regular;{self.ui.font(26)}" halign="center" foregroundColor="#888888" transparent="1" />
+
+            <eLabel position="0,{self.ui.px(510)}" size="{self.ui.px(1000)},{self.ui.px(110)}" backgroundColor="#252525" zPosition="-1" />
+            <eLabel position="{self.ui.px(40)},{self.ui.px(545)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#ff0000" />
+            <widget name="l_red" position="{self.ui.px(70)},{self.ui.px(540)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <eLabel position="{self.ui.px(280)},{self.ui.px(545)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#00ff00" />
+            <widget name="l_green" position="{self.ui.px(310)},{self.ui.px(540)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <eLabel position="{self.ui.px(520)},{self.ui.px(545)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#ffff00" />
+            <widget name="l_yellow" position="{self.ui.px(550)},{self.ui.px(540)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
+            <eLabel position="{self.ui.px(760)},{self.ui.px(545)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#0000ff" />
+            <widget name="l_blue" position="{self.ui.px(790)},{self.ui.px(540)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
         </screen>"""
         self["channel"] = Label(f"{channel_name}"); self["keylabel"] = Label(""); self["char_list"] = Label(""); self["progress"] = ProgressBar()
         self["l_red"] = Label("EXIT"); self["l_green"] = Label("SAVE"); self["l_yellow"] = Label("DELETE"); self["l_blue"] = Label("RESET")
-        self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions", "DirectionActions"], {
-            "cancel": self.exit_clean, "red": self.exit_clean, "green": self.save, "yellow": self.delete_digit, "blue": self.reset_all,
-            "left": self.move_left, "right": self.move_right, "up": self.move_char_up, "down": self.move_char_down, 
-            "0": lambda: self.keyNum("0"), "1": lambda: self.keyNum("1"), "2": lambda: self.keyNum("2"), "3": lambda: self.keyNum("3"), 
-            "4": lambda: self.keyNum("4"), "5": lambda: self.keyNum("5"), "6": lambda: self.keyNum("6"), "7": lambda: self.keyNum("7"), 
-            "8": lambda: self.keyNum("8"), "9": lambda: self.keyNum("9")}, -1)
+        self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "NumberActions", "DirectionActions"], {"cancel": self.exit_clean, "red": self.exit_clean, "green": self.save, "yellow": self.delete_digit, "blue": self.reset_all, "left": self.move_left, "right": self.move_right, "up": self.move_char_up, "down": self.move_char_down, "0": lambda: self.keyNum("0"), "1": lambda: self.keyNum("1"), "2": lambda: self.keyNum("2"), "3": lambda: self.keyNum("3"), "4": lambda: self.keyNum("4"), "5": lambda: self.keyNum("5"), "6": lambda: self.keyNum("6"), "7": lambda: self.keyNum("7"), "8": lambda: self.keyNum("8"), "9": lambda: self.keyNum("9")}, -1)
         self.key_list = list(existing_key.upper()) if (existing_key and len(existing_key) == 16) else ["0"] * 16
         self.index = 0; self.chars = ["A","B","C","D","E","F"]; self.char_index = 0; self.update_display()
     def update_display(self):
