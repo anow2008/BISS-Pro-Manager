@@ -138,20 +138,27 @@ class BISSPro(Screen):
 
     def action_auto(self):
         service = self.session.nav.getCurrentService()
-        if service: self["status"].setText("Smart Searching..."); self["main_progress"].setValue(40); Thread(target=self.do_auto, args=(service,)).start()
+        if service: self["status"].setText("Searching by Frequency..."); self["main_progress"].setValue(40); Thread(target=self.do_auto, args=(service,)).start()
+
     def do_auto(self, service):
         try:
             info = service.info(); ch_name = info.getName(); t_data = info.getInfoObject(iServiceInformation.sTransponderData)
+            # جلب التردد فقط
             curr_freq = str(int(t_data.get("frequency", 0) / 1000 if t_data.get("frequency", 0) > 50000 else t_data.get("frequency", 0)))
             raw_sid = info.getInfo(iServiceInformation.sSID); combined_id = ("%04X" % (raw_sid & 0xFFFF)) + ("%04X" % (info.getInfo(iServiceInformation.sVideoPID) & 0xFFFF))
+            
             raw_data = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
             self["main_progress"].setValue(70)
-            m = re.search(re.escape(curr_freq) + r'.*?' + re.escape(ch_name.split()[0].lower()) + r'.*?(([0-9A-Fa-f]{2}[\s\t]*){8})', raw_data, re.I | re.S)
+            
+            # التعديل هنا: البحث بالتردد فقط وتجاهل الاسم
+            # يبحث عن السطر الذي يبدأ بالتردد ويستخرج أول مفتاح هيكسا مكون من 16 خانة
+            m = re.search(re.escape(curr_freq) + r'.*?(([0-9A-Fa-f]{2}[\s\t]*){8})', raw_data, re.I | re.S)
+            
             if m:
                 key = m.group(1).replace(" ", "").upper()
-                if self.save_biss_key(combined_id, key, ch_name): self.res = (True, f"Key Found: {key}")
+                if self.save_biss_key(combined_id, key, ch_name): self.res = (True, f"Key Found for Freq {curr_freq}: {key}")
                 else: self.res = (False, "Save Error")
-            else: self.res = (False, "Key Not Found Online")
+            else: self.res = (False, f"No Key Found for Frequency {curr_freq}")
         except Exception: self.res = (False, "Network Error")
         self.timer.start(100, True)
 
@@ -217,10 +224,8 @@ class HexInputScreen(Screen):
             <widget name="progress" position="{self.ui.px(200)},{self.ui.px(100)}" size="{self.ui.px(600)},{self.ui.px(15)}" foregroundColor="#00ff00" />
             <widget name="keylabel" position="{self.ui.px(10)},{self.ui.px(140)}" size="{self.ui.px(980)},{self.ui.px(120)}" font="Regular;{self.ui.font(75)}" halign="center" foregroundColor="#f0a30a" transparent="1" />
             <widget name="char_list" position="{self.ui.px(10)},{self.ui.px(300)}" size="{self.ui.px(980)},{self.ui.px(80)}" font="Regular;{self.ui.font(45)}" halign="center" foregroundColor="#ffffff" transparent="1" />
-            
             <eLabel text="Use LEFT/RIGHT arrows to move between digits" position="{self.ui.px(10)},{self.ui.px(400)}" size="{self.ui.px(980)},{self.ui.px(35)}" font="Regular;{self.ui.font(26)}" halign="center" foregroundColor="#888888" transparent="1" />
             <eLabel text="Use UP/DOWN arrows to change letters (A-F)" position="{self.ui.px(10)},{self.ui.px(440)}" size="{self.ui.px(980)},{self.ui.px(35)}" font="Regular;{self.ui.font(26)}" halign="center" foregroundColor="#888888" transparent="1" />
-
             <eLabel position="0,{self.ui.px(510)}" size="{self.ui.px(1000)},{self.ui.px(110)}" backgroundColor="#252525" zPosition="-1" />
             <eLabel position="{self.ui.px(40)},{self.ui.px(545)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#ff0000" />
             <widget name="l_red" position="{self.ui.px(70)},{self.ui.px(540)}" size="{self.ui.px(150)},{self.ui.px(40)}" font="Regular;{self.ui.font(26)}" transparent="1" />
