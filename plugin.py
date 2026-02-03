@@ -6,11 +6,15 @@ from Components.ActionMap import ActionMap
 from Components.MenuList import MenuList
 from Components.Label import Label
 from Components.ProgressBar import ProgressBar
-from Components.MultiContent import MultiContentEntryText
-from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_VALIGN_TOP
+from Components.MultiContent import MultiContentEntryText, MultiContentEntryPixmapAlphaTest
+from enigma import iServiceInformation, gFont, eTimer, getDesktop, RT_VALIGN_TOP, RT_VALIGN_CENTER
+from Tools.LoadPixmap import LoadPixmap
 import os, re, shutil, time
 from urllib.request import urlopen, urlretrieve
 from threading import Thread
+
+# تحديد مسار البلجن والأيقونات
+PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro/"
 
 def get_softcam_path():
     paths = ["/etc/tuxbox/config/oscam/SoftCam.Key", "/etc/tuxbox/config/ncam/SoftCam.Key", "/etc/tuxbox/config/SoftCam.Key", "/usr/keys/SoftCam.Key"]
@@ -80,13 +84,34 @@ class BISSPro(Screen):
         self["date_label"].setText(time.strftime("%A, %d %B %Y"))
 
     def build_menu(self):
-        menu_items = [("Add", "Add BISS Key Manually", "add"), ("Key Editor", "Edit or Delete Stored Keys", "editor"), ("Update Softcam", "Download latest SoftCam.Key", "upd"), ("Smart Auto Search", "Auto find key for current channel", "auto")]
+        # مصفوفة القائمة مع مسارات الأيقونات
+        icon_dir = PLUGIN_PATH + "icons/"
+        menu_items = [
+            ("Add", "Add BISS Key Manually", "add", icon_dir + "add.png"),
+            ("Key Editor", "Edit or Delete Stored Keys", "editor", icon_dir + "editor.png"),
+            ("Update Softcam", "Download latest SoftCam.Key", "upd", icon_dir + "update.png"),
+            ("Smart Auto Search", "Auto find key for current channel", "auto", icon_dir + "auto.png")
+        ]
+        
         lst = []
-        for name, desc, act in menu_items:
-            res = (name, [MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(5)), size=(self.ui.px(950), self.ui.px(45)), font=0, text=name, flags=RT_VALIGN_TOP), MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(50)), size=(self.ui.px(950), self.ui.px(35)), font=1, text=desc, flags=RT_VALIGN_TOP, color=0xbbbbbb), act])
+        for name, desc, act, icon_path in menu_items:
+            # تحميل الأيقونة برمجياً
+            pixmap = LoadPixmap(cached=True, path=icon_path)
+            
+            res = (name, [
+                # إضافة الأيقونة في أقصى اليسار
+                MultiContentEntryPixmapAlphaTest(pos=(self.ui.px(15), self.ui.px(15)), size=(self.ui.px(70), self.ui.px(70)), png=pixmap),
+                # إزاحة النصوص لتبدأ بعد الأيقونة
+                MultiContentEntryText(pos=(self.ui.px(110), self.ui.px(10)), size=(self.ui.px(850), self.ui.px(45)), font=0, text=name, flags=RT_VALIGN_TOP),
+                MultiContentEntryText(pos=(self.ui.px(110), self.ui.px(55)), size=(self.ui.px(850), self.ui.px(35)), font=1, text=desc, flags=RT_VALIGN_TOP, color=0xbbbbbb),
+                act
+            ])
             lst.append(res)
+            
         self["menu"].l.setList(lst)
-        if hasattr(self["menu"].l, 'setFont'): self["menu"].l.setFont(0, gFont("Regular", self.ui.font(36))); self["menu"].l.setFont(1, gFont("Regular", self.ui.font(24)))
+        if hasattr(self["menu"].l, 'setFont'): 
+            self["menu"].l.setFont(0, gFont("Regular", self.ui.font(36)))
+            self["menu"].l.setFont(1, gFont("Regular", self.ui.font(24)))
 
     def ok(self):
         curr = self["menu"].getCurrent()
@@ -143,17 +168,11 @@ class BISSPro(Screen):
     def do_auto(self, service):
         try:
             info = service.info(); ch_name = info.getName(); t_data = info.getInfoObject(iServiceInformation.sTransponderData)
-            # جلب التردد فقط
             curr_freq = str(int(t_data.get("frequency", 0) / 1000 if t_data.get("frequency", 0) > 50000 else t_data.get("frequency", 0)))
             raw_sid = info.getInfo(iServiceInformation.sSID); combined_id = ("%04X" % (raw_sid & 0xFFFF)) + ("%04X" % (info.getInfo(iServiceInformation.sVideoPID) & 0xFFFF))
-            
             raw_data = urlopen("https://raw.githubusercontent.com/anow2008/softcam.key/refs/heads/main/biss.txt", timeout=10).read().decode("utf-8")
             self["main_progress"].setValue(70)
-            
-            # التعديل هنا: البحث بالتردد فقط وتجاهل الاسم
-            # يبحث عن السطر الذي يبدأ بالتردد ويستخرج أول مفتاح هيكسا مكون من 16 خانة
             m = re.search(re.escape(curr_freq) + r'.*?(([0-9A-Fa-f]{2}[\s\t]*){8})', raw_data, re.I | re.S)
-            
             if m:
                 key = m.group(1).replace(" ", "").upper()
                 if self.save_biss_key(combined_id, key, ch_name): self.res = (True, f"Key Found for Freq {curr_freq}: {key}")
