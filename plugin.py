@@ -14,12 +14,10 @@ from urllib.request import urlopen, urlretrieve
 from threading import Thread
 
 # ==========================================================
-# التعريفات والروابط الخاصة بك
+# التعريفات والروابط
 # ==========================================================
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/BissPro/"
 VERSION_NUM = "v1.0"
-
-# روابط التحديث الخاصة بمستودعك
 URL_VERSION = "https://raw.githubusercontent.com/anow2008/BissPro/refs/heads/main/version.txt"
 URL_PLUGIN = "https://raw.githubusercontent.com/anow2008/BissPro/refs/heads/main/plugin.py"
 
@@ -67,7 +65,7 @@ class BISSPro(Screen):
             <eLabel position="{self.ui.px(530)},{self.ui.px(585)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#ffff00" />
             <widget name="btn_yellow" position="{self.ui.px(565)},{self.ui.px(580)}" size="{self.ui.px(180)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
             <eLabel position="{self.ui.px(760)},{self.ui.px(585)}" size="{self.ui.px(25)},{self.ui.px(25)}" backgroundColor="#0000ff" />
-            <widget name="btn_blue" position="{self.ui.px(795)},{self.ui.px(580)}" size="{self.ui.px(250)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
+            <widget name="btn_blue" position="{self.ui.px(795)},{self.ui.px(250)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
             <widget name="status" position="{self.ui.px(50)},{self.ui.px(660)}" size="{self.ui.px(1000)},{self.ui.px(70)}" font="Regular;{self.ui.font(32)}" halign="center" valign="center" transparent="1" foregroundColor="#f0a30a"/>
         </screen>"""
         self["btn_red"] = Label("Add Key")
@@ -283,6 +281,7 @@ class HexInputScreen(Screen):
         }, -1)
         self.key_list = list(existing_key.upper()) if (existing_key and len(existing_key) == 16) else ["0"] * 16
         self.index = 0; self.chars = ["A","B","C","D","E","F"]; self.char_index = 0; self.update_display()
+
     def update_display(self):
         display_parts = []
         for i in range(16):
@@ -292,7 +291,18 @@ class HexInputScreen(Screen):
             if (i + 1) % 4 == 0 and i < 15: display_parts.append(" - ")
         self["keylabel"].setText("".join(display_parts))
         self["progress"].setValue(int(((self.index + 1) / 16.0) * 100))
-        curr = self.chars[self.char_index]; self["char_list"].setText("  ".join(self.chars).replace(curr, "> %s <" % curr))
+        
+        # تحسين عرض قائمة الحروف A-F مع الألوان والأقواس
+        char_bar = ""
+        color_yellow = "\c00f0a30a"
+        color_white = "\c00ffffff"
+        for c in self.chars:
+            if c == self.chars[self.char_index]:
+                char_bar += "%s[ %s ]  " % (color_yellow, c)
+            else:
+                char_bar += "%s  %s    " % (color_white, c)
+        self["char_list"].setText(char_bar)
+
     def clear_current(self): self.key_list[self.index] = "0"; self.update_display()
     def reset_all(self): self.key_list = ["0"] * 16; self.index = 0; self.update_display()
     def move_char_up(self): self.char_index = (self.char_index - 1) % len(self.chars); self.key_list[self.index] = self.chars[self.char_index]; self.update_display()
@@ -305,4 +315,3 @@ class HexInputScreen(Screen):
 
 def main(session, **kwargs): session.open(BISSPro)
 def Plugins(**kwargs): return [PluginDescriptor(name="BissPro Smart", description="Smart BISS Manager", icon="plugin.png", where=PluginDescriptor.WHERE_PLUGINMENU, fnc=main)]
-
