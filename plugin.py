@@ -38,7 +38,6 @@ class BISSPro(Screen):
     def __init__(self, session):
         self.ui = AutoScale()
         Screen.__init__(self, session)
-        # تم إعادة تعريف الـ Skin بالكامل لإظهار الألوان والأسماء
         self.skin = f"""
         <screen position="center,center" size="{self.ui.px(1100)},{self.ui.px(750)}" title="BissPro Smart Sync v1.0">
             <widget name="menu" position="{self.ui.px(50)},{self.ui.px(30)}" size="{self.ui.px(1000)},{self.ui.px(480)}" itemHeight="{self.ui.px(110)}" scrollbarMode="showOnDemand" transparent="1"/>
@@ -64,8 +63,8 @@ class BISSPro(Screen):
         self["btn_yellow"] = Label("Update Softcam")
         self["btn_blue"] = Label("Smart Auto Search")
         self["status"] = Label("Ready")
-        self["menu"] = MenuList([])
         
+        self["menu"] = MenuList([])
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], {
             "ok": self.ok, "cancel": self.close, "red": self.action_add, "green": self.action_editor, 
             "yellow": self.action_update, "blue": self.action_auto}, -1)
@@ -76,22 +75,24 @@ class BISSPro(Screen):
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        # تم تعديل بناء القائمة ليكون أول عنصر هو "نص" (String) لحل مشكلة الظهور في الصورة
-        menu_items = [
-            ("Add", "Add BISS Key Manually", "add"), 
-            ("Key Editor", "Edit or Delete Stored Keys", "editor"), 
-            ("Update Softcam", "Download latest SoftCam.Key", "upd"), 
+        # هذا التنسيق يضمن ظهور الاسم بشكل صريح كأول عنصر يقرأه النظام
+        lst = []
+        # (اسم الزر الظاهر، الوصف، الرمز البرمجي للأكشن)
+        items = [
+            ("Add", "Add BISS Key Manually", "add"),
+            ("Key Editor", "Edit or Delete Stored Keys", "editor"),
+            ("Update Softcam", "Download latest SoftCam.Key", "upd"),
             ("Smart Auto Search", "Auto find key for current channel", "auto")
         ]
-        lst = []
-        for title, desc, action in menu_items:
-            # المفتاح هنا هو جعل العنصر الأول في الـ tuple هو العنوان مباشرة
-            item = (title, [
-                MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(10)), size=(self.ui.px(950), self.ui.px(50)), font=0, text=title, flags=RT_VALIGN_TOP),
+        
+        for name, desc, act in items:
+            # هنا التعديل الجوهري: نمرر الاسم أولاً كعنصر مستقل داخل الـ tuple
+            res = (name, [
+                MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(10)), size=(self.ui.px(950), self.ui.px(50)), font=0, text=name, flags=RT_VALIGN_TOP),
                 MultiContentEntryText(pos=(self.ui.px(20), self.ui.px(60)), size=(self.ui.px(950), self.ui.px(40)), font=1, text=desc, flags=RT_VALIGN_TOP, color=0xbbbbbb),
-                action # نضع الأكشن في الآخر للاستخدام البرمجي
+                act # نحتفظ بالأكشن في النهاية
             ])
-            lst.append(item)
+            lst.append(res)
             
         self["menu"].l.setList(lst)
         if hasattr(self["menu"].l, 'setFont'): 
@@ -100,9 +101,8 @@ class BISSPro(Screen):
 
     def ok(self):
         curr = self["menu"].getCurrent()
-        if curr:
-            # نبحث عن الأكشن (add, editor, إلخ) في قائمة العناصر
-            act = curr[1][-1]
+        if curr and len(curr) > 1:
+            act = curr[1][-1] # استخراج الأكشن من آخر القائمة الداخلية
             if act == "add": self.action_add()
             elif act == "editor": self.action_editor()
             elif act == "upd": self.action_update()
@@ -233,7 +233,6 @@ class HexInputScreen(Screen):
         <screen position="center,center" size="1000,600" title="Key Input" backgroundColor="#1a1a1a">
             <widget name="channel" position="10,20" size="980,60" font="Regular;42" halign="center" foregroundColor="#00ff00" transparent="1" />
             <widget name="keylabel" position="10,140" size="980,120" font="Regular;75" halign="center" foregroundColor="#f0a30a" transparent="1" />
-            
             <eLabel position="30,545" size="25,25" backgroundColor="#ff0000" />
             <widget name="key_red" position="65,540" size="160,35" font="Regular;24" halign="left" transparent="1" />
             <eLabel position="270,545" size="25,25" backgroundColor="#00ff00" />
