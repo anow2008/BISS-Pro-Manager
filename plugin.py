@@ -44,24 +44,26 @@ class BISSPro(Screen):
             <eLabel position="{self.ui.px(50)},{self.ui.px(520)}" size="{self.ui.px(1000)},{self.ui.px(2)}" backgroundColor="#333333" />
             
             <eLabel position="{self.ui.px(70)},{self.ui.px(560)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ff0000" />
-            <widget name="btn_red" position="{self.ui.px(110)},{self.ui.px(555)}" size="{self.ui.px(180)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
+            <widget name="btn_red" position="{self.ui.px(110)},{self.ui.px(555)}" size="{self.ui.px(200)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
             
-            <eLabel position="{self.ui.px(300)},{self.ui.px(560)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#00ff00" />
-            <widget name="btn_green" position="{self.ui.px(340)},{self.ui.px(555)}" size="{self.ui.px(180)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
+            <eLabel position="{self.ui.px(320)},{self.ui.px(560)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#00ff00" />
+            <widget name="btn_green" position="{self.ui.px(360)},{self.ui.px(555)}" size="{self.ui.px(200)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
             
-            <eLabel position="{self.ui.px(530)},{self.ui.px(560)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ffff00" />
-            <widget name="btn_yellow" position="{self.ui.px(570)},{self.ui.px(555)}" size="{self.ui.px(180)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
+            <eLabel position="{self.ui.px(550)},{self.ui.px(560)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#ffff00" />
+            <widget name="btn_yellow" position="{self.ui.px(590)},{self.ui.px(555)}" size="{self.ui.px(200)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
             
-            <eLabel position="{self.ui.px(760)},{self.ui.px(560)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#0000ff" />
-            <widget name="btn_blue" position="{self.ui.px(800)},{self.ui.px(555)}" size="{self.ui.px(180)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
+            <eLabel position="{self.ui.px(780)},{self.ui.px(560)}" size="{self.ui.px(30)},{self.ui.px(30)}" backgroundColor="#0000ff" />
+            <widget name="btn_blue" position="{self.ui.px(820)},{self.ui.px(555)}" size="{self.ui.px(220)},{self.ui.px(40)}" font="Regular;{self.ui.font(24)}" transparent="1" />
             
             <widget name="status" position="{self.ui.px(50)},{self.ui.px(640)}" size="{self.ui.px(1000)},{self.ui.px(60)}" font="Regular;{self.ui.font(28)}" halign="center" valign="center" transparent="1" foregroundColor="#f0a30a"/>
         </screen>"""
-        self["status"] = Label("Ready")
+        
+        # الأسماء في شريط الألوان تحت
         self["btn_red"] = Label("Add")
         self["btn_green"] = Label("Key Editor")
-        self["btn_yellow"] = Label("Update")
-        self["btn_blue"] = Label("Auto Search")
+        self["btn_yellow"] = Label("Update Softcam")
+        self["btn_blue"] = Label("Smart Auto Search")
+        self["status"] = Label("Ready")
         
         self["menu"] = MenuList([])
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions"], {
@@ -74,11 +76,11 @@ class BISSPro(Screen):
         self.onLayoutFinish.append(self.build_menu)
 
     def build_menu(self):
-        # تم تعديل الأسماء هنا لتكون كما طلبت بالظبط
+        # الأسماء المطلوبة داخل القائمة (الرئيسي وتحته الوصف)
         items = [
             ("Add", "Add BISS Manually", "add"), 
-            ("Key Editor", "Edit or Delete Keys", "editor"), 
-            ("Update Softcam", "Update SoftCam.Key File", "upd"), 
+            ("Key Editor", "Manage and Delete Keys", "editor"), 
+            ("Update Softcam", "Update SoftCam.Key from server", "upd"), 
             ("Smart Auto Search", "Smart Auto Search (Internet)", "auto")
         ]
         lst = []
@@ -89,8 +91,8 @@ class BISSPro(Screen):
             ]))
         self["menu"].l.setList(lst)
         if hasattr(self["menu"].l, 'setFont'): 
-            self["menu"].l.setFont(0, gFont("Regular", self.ui.font(36)))
-            self["menu"].l.setFont(1, gFont("Regular", self.ui.font(24)))
+            self["menu"].l.setFont(0, gFont("Regular", self.ui.font(38))) # الاسم الرئيسي
+            self["menu"].l.setFont(1, gFont("Regular", self.ui.font(24))) # الوصف
 
     def ok(self):
         curr = self["menu"].getCurrent(); act = curr[0] if curr else ""
@@ -230,8 +232,8 @@ class HexInputScreen(Screen):
             <widget name="progress" position="200,100" size="600,15" foregroundColor="#00ff00" zPosition="2" />
             <widget name="keylabel" position="10,140" size="980,120" font="Regular;75" halign="center" foregroundColor="#f0a30a" transparent="1" />
             
-            <eLabel text="UP / DOWN: Move Between Letters (A-F)" position="10,270" size="980,35" font="Regular;22" halign="center" foregroundColor="#ffffff" transparent="1" />
-            <eLabel text="LEFT / RIGHT: Move Between Digits (0-9)" position="10,310" size="980,35" font="Regular;22" halign="center" foregroundColor="#ffffff" transparent="1" />
+            <eLabel text="UP / DOWN: Change Character (A-F)" position="10,270" size="980,35" font="Regular;24" halign="center" foregroundColor="#ffffff" transparent="1" />
+            <eLabel text="LEFT / RIGHT: Navigate Digits (0-9)" position="10,310" size="980,35" font="Regular;24" halign="center" foregroundColor="#ffffff" transparent="1" />
             
             <widget name="char_list" position="10,360" size="980,80" font="Regular;45" halign="center" foregroundColor="#ffffff" transparent="1" />
             <eLabel position="0,520" size="1000,80" backgroundColor="#252525" zPosition="-1" />
